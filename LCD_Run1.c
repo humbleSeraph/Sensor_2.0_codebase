@@ -36,6 +36,7 @@ void InitPorts(void);
 void InitTimers(void);
 void InitInterrupts(void);
 void InitComm(void);
+void NokiaInit(void);
 
 
 /******* Acutal Functions ****************/
@@ -78,11 +79,23 @@ void InitComm()
 	WCOL = 0; 	 			// no collision
 	SSPOV = 0; 				// no overflow
 	SSP1EN = 1; 			// SSP Enable
+
 	CKP = 1; 				// idle high 
+	CKE = 1;				// sample even edges 
+
 	SSP1M3 =  0;			// Set LF1827 as Master, clock rate Fosc / 4
 	SSP1M2 = 0;
 	SSP1M1 = 0; 
 	SSP1M0 = 0; 
+
+
+
+}
+
+void NokiaInit()
+{
+
+
 
 
 
@@ -125,6 +138,7 @@ void main ()
 	InitPorts();
 	InitTimers();
 	InitInterrupts();
+	InitComm(); 
 	while(1)
 	{
 
