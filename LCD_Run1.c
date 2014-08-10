@@ -75,6 +75,9 @@ void InitComm()
 {
 	// setup SPI-1 (aka SSP) to communicate with Nokia LCD screen
 
+	SSP1ADD = 0;			// Baud Rate = Fosc / ((SSP1ADD + 1)(4))
+							// since Fosc = 4 MHz, Baud Rate = 1 MHz
+
 	SSPSTAT = 0;			// data on rising edge, data @ middle
 	WCOL = 0; 	 			// no collision
 	SSPOV = 0; 				// no overflow
@@ -94,10 +97,15 @@ void InitComm()
 
 void NokiaInit()
 {
+	// initialization sequence for the PCD8544 driver on the Nokia LCD
 
+	SSPBUF = 0x21;			// tell LCD extended commands to follow
+	SSPBUF = 0xB0;			// set LCD Vop (contrast) ** parameter to mess with if screen doesn't display **** 
+	SSPBUF = 0x04;			// set temp coefficient
+	SSPBUF = 0x14; 			// LCD Bias mode 1:48 (if not working, try 0x13)
 
-
-
+	SSPBUF = 0x20;			// back to regular commands
+	SSPBUF = 0x0C; 			// enable normal display (dark on light), horiz addressing
 
 }
 
