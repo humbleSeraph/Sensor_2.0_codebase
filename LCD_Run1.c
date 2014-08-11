@@ -15,6 +15,7 @@ author: Osagie Igbeare
 #include <htc.h>
 #include "pic.h"
 #include "chip_select.h"
+#include "TIMERS12.h"				// from JEC, prof of ME218
 
 
 /***************** Configuration Macros ***************/
@@ -24,10 +25,14 @@ __CONFIG(FCMEN_OFF & IESO_OFF & FOSC_XT & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BORE
 
 
 /***************** # Defines *****************/
+#define lcd_data BIT3HI
+#define lcd_command BIT3LO
 
 /*************** module level variables ************/
 
 static char counter; 
+int currentTime;
+int newTime;
 
 
 /******* Function Prototypes ***************/
@@ -37,6 +42,7 @@ void InitTimers(void);
 void InitInterrupts(void);
 void InitComm(void);
 void NokiaInit(void);
+void Delay(int pause); 
 
 
 /******* Acutal Functions ****************/
@@ -47,11 +53,11 @@ void InitPorts()
 	ANSELA = 0x00;			// Port A pins are digital
 	ANSELB = 0x00;			// Port B pins are digital
 
-	TRISA = 0b11111011;		// 1 - input, 0 - output, RA2 is an output
-	TRISB = 0b11011111;		// 1 - input, 0 - output, RB5 is an output
+	TRISA = 0b11111010;		// 1 - input, 0 - output, RA2, RA0 are outputs
+	TRISB = 0b10000011;		// 1 - input, 0 - output, RB2 - RB6 is an output
 
-	PORTA = 0xFF;			// initialize LED to OFF
-	PORTB = 0xFF;
+	PORTA = 0b11111111;			// initialize LED to OFF
+	PORTB = 0b11111111;
 
 }
 
@@ -59,7 +65,9 @@ void InitTimers()
 {
 
 	T2CON = 0b01111110;		// Fosc / (4 instruct * 16 prescale * 16 postscale * 60 PR2) = 65 Hz
-	PR2 = 250; 
+	PR2 = 250;
+
+	TMRS12_Init(TMRS12_RATE_2MS);
 }
 
 void InitInterrupts()
@@ -95,12 +103,30 @@ void InitComm()
 
 }
 
+void Delay(int pause)
+{
+	currentTime = TMRS12_GetTime(); 
+	newTime = currentTime;
+	while (newTime - currentTime < pause){
+		newTime = TMRS12_GetTime();
+	}
+		time2 = newTime - currentTime; 
+		//printf("%d\r\n", time2); 
+}
+
 void NokiaInit()
 {
 	// initialization sequence for the PCD8544 driver on the Nokia LCD
+	// beginning with RESET 
+
+	PORTA &= BIT0LO;
+	Delay(1);
+	PORTA |= BIT0HI;
+
+	PORTB &= lcd_command;	// tell LCD commands are coming 
 
 	SSPBUF = 0x21;			// tell LCD extended commands to follow
-	SSPBUF = 0xB0;			// set LCD Vop (contrast) ** parameter to mess with if screen doesn't display **** 
+	SSPBUF = 0xE0;			// set LCD Vop (contrast) ** parameter to mess with if screen doesn't display **** 
 	SSPBUF = 0x04;			// set temp coefficient
 	SSPBUF = 0x14; 			// LCD Bias mode 1:48 (if not working, try 0x13)
 
@@ -118,13 +144,13 @@ void interrupt ISR()
 		if ((counter % 2) != 0)
 		{
 			PORTA |= BIT2HI;
-			PORTB &= BIT5LO;
+			PORTB &= BIT6LO;
 			
 		}
 		else 
 		{
 			PORTA &= BIT2LO;
-			PORTB |= BIT5HI;
+			PORTB |= BIT6HI;
 			counter = 0; 
 		}
 
@@ -147,6 +173,7 @@ void main ()
 	InitTimers();
 	InitInterrupts();
 	InitComm(); 
+	NokiaInit();
 	while(1)
 	{
 
