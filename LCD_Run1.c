@@ -15,7 +15,7 @@ author: Osagie Igbeare
 #include <htc.h>
 #include "pic.h"
 #include "chip_select.h"
-#include "TIMERS12.h"				// from JEC, prof of ME218
+//#include "pic16lf1827.h"
 
 
 /***************** Configuration Macros ***************/
@@ -31,8 +31,7 @@ __CONFIG(FCMEN_OFF & IESO_OFF & FOSC_XT & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BORE
 /*************** module level variables ************/
 
 static char counter; 
-int currentTime;
-int newTime;
+
 
 
 /******* Function Prototypes ***************/
@@ -42,7 +41,7 @@ void InitTimers(void);
 void InitInterrupts(void);
 void InitComm(void);
 void NokiaInit(void);
-void Delay(int pause); 
+
 
 
 /******* Acutal Functions ****************/
@@ -66,8 +65,6 @@ void InitTimers()
 
 	T2CON = 0b01111110;		// Fosc / (4 instruct * 16 prescale * 16 postscale * 60 PR2) = 65 Hz
 	PR2 = 250;
-
-	TMRS12_Init(TMRS12_RATE_2MS);
 }
 
 void InitInterrupts()
@@ -103,24 +100,13 @@ void InitComm()
 
 }
 
-void Delay(int pause)
-{
-	currentTime = TMRS12_GetTime(); 
-	newTime = currentTime;
-	while (newTime - currentTime < pause){
-		newTime = TMRS12_GetTime();
-	}
-		time2 = newTime - currentTime; 
-		//printf("%d\r\n", time2); 
-}
-
 void NokiaInit()
 {
 	// initialization sequence for the PCD8544 driver on the Nokia LCD
 	// beginning with RESET 
 
 	PORTA &= BIT0LO;
-	Delay(1);
+	_delay(1000);
 	PORTA |= BIT0HI;
 
 	PORTB &= lcd_command;	// tell LCD commands are coming 
