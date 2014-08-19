@@ -12,39 +12,17 @@ author: Osagie Igbeare
 /**************** Header Files *********************/
 
 #include "BitDefs.h"
-//#include <htc.h>
-#include <xc.h>
+#include <htc.h>
 #include "pic.h"
 #include "chip_select.h"
-
+//#include "TIMERS12.h"
+//#include "pic16lf1827.h"
 
 
 /***************** Configuration Macros ***************/
 
-//__CONFIG(FCMEN_OFF & IESO_OFF & FOSC_LP & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BOREN_OFF
-//		& LVP_ON & WRT_OFF & CPD_OFF & CP_OFF);
-
-// #pragma config statements should precede project file includes.
-// Use project enums instead of #define for ON and OFF.
-
-// CONFIG1
-#pragma config FOSC = LP        // Oscillator Selection (LP Oscillator, Low-power crystal connected between OSC1 and OSC2 pins)
-#pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
-#pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
-#pragma config MCLRE = ON       // MCLR Pin Function Select (MCLR/VPP pin function is MCLR)
-#pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled)
-#pragma config CPD = OFF        // Data Memory Code Protection (Data memory code protection is disabled)
-#pragma config BOREN = OFF      // Brown-out Reset Enable (Brown-out Reset disabled)
-#pragma config CLKOUTEN = ON    // Clock Out Enable (CLKOUT function is enabled on the CLKOUT pin)
-#pragma config IESO = OFF       // Internal/External Switchover (Internal/External Switchover mode is disabled)
-#pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is disabled)
-
-// CONFIG2
-#pragma config WRT = OFF        // Flash Memory Self-Write Protection (Write protection off)
-#pragma config PLLEN = OFF      // PLL Enable (4x PLL enabled)
-#pragma config STVREN = ON     // Stack Overflow/Underflow Reset Enable (Stack Overflow or Underflow will cause a Reset)
-#pragma config BORV = LO        // Brown-out Reset Voltage Selection (Brown-out Reset Voltage (Vbor), low trip point selected.)
-#pragma config LVP = ON         // Low-Voltage Programming Enable (Low-voltage programming enabled)
+__CONFIG(FCMEN_OFF & IESO_OFF & FOSC_LP & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BOREN_OFF
+		& LVP_ON & WRT_OFF & CPD_OFF & CP_OFF);
 
 
 /***************** # Defines *****************/
@@ -58,6 +36,7 @@ static char counter;
 int x;
 int i = 0;
 char dummy;
+char byte; 
 static char LCD_Init[6]; 
 
 
@@ -71,6 +50,8 @@ void InitComm(void);
 void NokiaInit(void);
 void Delay(int waitTime); 
 void SightPin_B0(void);
+void sendByte(char byte);
+
 
 
 
@@ -82,8 +63,8 @@ void InitPorts()
 	ANSELA = 0x00;			// Port A pins are digital
 	ANSELB = 0x00;			// Port B pins are digital
 
-	TRISA = 0b11111010;		// 1 - input, 0 - output, RA2, RA0 are outputs
-	TRISB = 0b10000010;		// 1 - input, 0 - output, RB0, RB2 - RB6 is an output
+	TRISA = 0b00000000;		// 1 - input, 0 - output, RA2, RA0 are outputs
+	TRISB = 0b00000010;		// 1 - input, 0 - output, RB0, RB2 - RB6 is an output
 
 	PORTA = 0b11111111;			// initialize LED to OFF
 	PORTB = 0b11111111;
@@ -116,7 +97,7 @@ void InitComm()
 {
 	// setup SPI-1 (aka SSP) to communicate with Nokia LCD screen
 
-	SSP1ADD = 0;                                    // Baud Rate = Fosc / ((SSP1ADD + 1)(4))
+	SSP1ADD = 2;			// Baud Rate = Fosc / ((SSP1ADD + 1)(4))
 							// since Fosc = 4 MHz, Baud Rate = 1 MHz
 							// since SSP1ADD = 0 is not supported same timing is achieved
 							// by setting bits <3:0> of SSPM all to 0's (see below)
@@ -124,17 +105,15 @@ void InitComm()
 	SSP1STATbits.SMP = 0;				// data on rising edge, data @ middle
 	SSP1CON1bits.WCOL = 0; 	 			// no collision
 	SSP1CON1bits.SSPOV = 0; 			// no overflow
-	
+	SSP1CON1bits.SSPEN = 1; 			// SSP Enable
 
 	SSP1CON1bits.CKP = 1; 				// idle high 
-	SSP1STATbits.CKE = 1;				// sample even edges 
+	SSP1STATbits.CKE = 0;				// sample ? edges 
 
 	SSP1CON1bits.SSPM3 =  0;			// Set LF1827 as Master, clock rate Fosc / 4
 	SSP1CON1bits.SSPM2 = 0;
 	SSP1CON1bits.SSPM1 = 0; 
-	SSP1CON1bits.SSPM0 = 0;
-
-        SSP1CON1bits.SSPEN = 1; 			// SSP Enable
+	SSP1CON1bits.SSPM0 = 0; 
 
 }
 
@@ -161,39 +140,14 @@ void NokiaInit()
 	PORTA |= BIT0HI;
 	*/
 	
-	PORTB &= lcd_command;           // tell LCD commands are coming
-
+	PORTB &= lcd_command;	// tell LCD commands are coming 
 	
+	PORTB &= BIT5LO;		// lower SCE line to begin transmission
 	
-	PORTB &= BIT5LO;			// lower SCE line to begin transmission
-	
-	//SightPin_B0();
-
-        PIR1bits.SSP1IF = 0;
-
-        SSP1CON1bits.WCOL = 0; 
-
-	SSP1BUF =  0xC3;
-	
-
-        if(SSP1CON1bits.WCOL == 0)
+	for (i=0; i<6; i++)
 	{
-		SSP1BUF = 0xC3;
-	}
-	
-
-	
-
-
-	/* 
-	SSP1BUF = 0x21;			// tell LCD extended commands to 
-	SSP1BUF = 0xB0;			
-	SSP1BUF = 0x04;			
-	SSP1BUF = 0x13; 			
-
-	SSP1BUF = 0x20;			
-	SSP1BUF = 0x0C; 
-	*/			
+		sendByte(LCD_Init[i]);
+	}	
 
 	PORTB |= BIT5HI;		// raising SCE line at the end of transmission0
 }
@@ -219,25 +173,6 @@ void interrupt ISR()
 		TMR2IF = 0;		// clears the TIMR2IF (timer 2 interrupt flag)
 
 	}
-	/*
-	if (SSP1IF)
-	{	
-				
-		if (i < 6)
-		{
-			SSP1BUF = LCD_Init[i];
-			i++;
-			SightPin_B0();
-		}
-		
-		SSP1BUF = LCD_Init[i];
-
-		SSP1IF = 0;	
-
-	}
-	*/
-	
-	return; 
 
 }
 
@@ -248,6 +183,17 @@ void Delay(int waitTime)
 	{
 		x += 1;
 	}
+}
+
+void sendByte (char byte)
+{
+	PIR1bits.SSP1IF = 0; 
+
+	SSP1BUF = byte; 
+
+	while (!SSP1STATbits.BF); 
+
+
 }
 
 /***********************************************************/
