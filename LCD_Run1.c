@@ -12,18 +12,39 @@ author: Osagie Igbeare
 /**************** Header Files *********************/
 
 #include "BitDefs.h"
-#include <htc.h>
+//#include <htc.h>          // for HI Tech C compiler
+#include <xc.h>
 #include "pic.h"
 #include "chip_select.h"
-//#include "TIMERS12.h"
-//#include "pic16lf1827.h"
+
 
 
 /***************** Configuration Macros ***************/
 
-__CONFIG(FCMEN_OFF & IESO_OFF & FOSC_LP & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BOREN_OFF
-		& LVP_ON & WRT_OFF & CPD_OFF & CP_OFF);
+//__CONFIG(FCMEN_OFF & IESO_OFF & FOSC_LP & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BOREN_OFF
+//		& LVP_ON & WRT_OFF & CPD_OFF & CP_OFF);
 
+// #pragma config statements should precede project file includes.
+// Use project enums instead of #define for ON and OFF.
+
+//
+#pragma config FOSC = LP        // Oscillator Selection (LP Oscillator, Low-power crystal connected between OSC1 and OSC2 pins)
+#pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
+#pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
+#pragma config MCLRE = ON       // MCLR Pin Function Select (MCLR/VPP pin function is MCLR)
+#pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled)
+#pragma config CPD = OFF        // Data Memory Code Protection (Data memory code protection is disabled)
+#pragma config BOREN = OFF      // Brown-out Reset Enable (Brown-out Reset disabled)
+#pragma config CLKOUTEN = ON    // Clock Out Enable (CLKOUT function is enabled on the CLKOUT pin)
+#pragma config IESO = OFF       // Internal/External Switchover (Internal/External Switchover mode is disabled)
+#pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is disabled)
+
+// CONFIG2
+#pragma config WRT = OFF        // Flash Memory Self-Write Protection (Write protection off)
+#pragma config PLLEN = OFF      // PLL Enable (4x PLL disabled)
+#pragma config STVREN = ON      // Stack Overflow/Underflow Reset Enable (Stack Overflow or Underflow will cause a Reset)
+#pragma config BORV = LO        // Brown-out Reset Voltage Selection (Brown-out Reset Voltage (Vbor), low trip point selected.)
+#pragma config LVP = ON         // Low-Voltage Programming Enable (Low-voltage programming enabled)
 
 /***************** # Defines *****************/
 #define lcd_data BIT3HI
@@ -86,8 +107,8 @@ void InitInterrupts()
 {
 
 	PIE1 = 0b00000010; 		// Enable TMR2IE, interrupt when Timer 2 matches PR2
-							// Enable SSP1IE, interrupt for MSSP1 (aka SPI1)
-							// Bit 3 high - enable MSSP interrupt 	
+					// Enable SSP1IE, interrupt for MSSP1 (aka SPI1)
+					// Bit 3 high - enable MSSP interrupt 	
 	INTCON = 0b11000000;	// Enable GIE, Enable PEIE
 	
 }
