@@ -44,7 +44,7 @@ adapted from code by Jim Lindblom, who adapted code from Nathan Seidle and
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
 
-//
+// CONFIG1
 #pragma config FOSC = LP        // Oscillator Selection (LP Oscillator, Low-power crystal connected between OSC1 and OSC2 pins)
 #pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
 #pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
@@ -63,13 +63,14 @@ adapted from code by Jim Lindblom, who adapted code from Nathan Seidle and
 #pragma config BORV = LO        // Brown-out Reset Voltage Selection (Brown-out Reset Voltage (Vbor), low trip point selected.)
 #pragma config LVP = ON         // Low-Voltage Programming Enable (Low-voltage programming enabled)
 
+
 /***************** # Defines *****************/
 #define lcd_data BIT3HI
 #define lcd_command BIT3LO
 #define hangTime 1000
 
 #define LCD_Width 84        //x coordinates go wide
-#define LCD_Height 24       //y coordinates go high
+#define LCD_Height 31       //y coordinates go high
 #define WHITE 0             // for drawing individual pixels, 0 draws white
 #define BLACK 1             // see above, 1 draws black
 
@@ -91,7 +92,7 @@ static char LCD_Init[6];
   represents one, 8-pixel, vertical column of a character. 5 bytes
   per character. */
 
-  /*
+ 
   static const char ASCII[][5] = {
     // First 32 characters (0x00-0x19) are ignored. These are
     // non-displayable, control characters.
@@ -155,7 +156,7 @@ static char LCD_Init[6];
     ,{0x07, 0x08, 0x70, 0x08, 0x07} // 0x59 Y
     ,{0x61, 0x51, 0x49, 0x45, 0x43} // 0x5a Z
     ,{0x00, 0x7f, 0x41, 0x41, 0x00} // 0x5b [
-    ,{0x02, 0x04, 0x08, 0x10, 0x20} // 0x5c /* \
+    ,{0x02, 0x04, 0x08, 0x10, 0x20} // 0x5c \
     ,{0x00, 0x41, 0x41, 0x7f, 0x00} // 0x5d ]
     ,{0x00, 0x41, 0x41, 0x7f, 0x00} // 0x5d ]
     ,{0x04, 0x02, 0x01, 0x02, 0x04} // 0x5e ^
@@ -193,7 +194,7 @@ static char LCD_Init[6];
     ,{0x10, 0x08, 0x08, 0x10, 0x08} // 0x7e ~
     ,{0x78, 0x46, 0x41, 0x46, 0x78} // 0x7f DEL
   };
-  */
+ 
 
   /* The displayMap variable stores a buffer representation of the
   pixels on our display. There are 504 total bits in this array,
@@ -232,18 +233,17 @@ static char LCD_Init[6];
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0x00, 0x00, 0x00, // (48,16)->(59,23)
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (60,16)->(71,23)
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (72,16)->(83,23)
- };
-
-// PIC16LF1827 only has 386 bytes of RAM, this array alone is 506, so I'm cutting it in half
-// until I get the LF1825 which has over 1K in memory :-P.
-
-/*
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (0,24)->(11,31)
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (12,24)->(23,31)
     0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // (24,24)->(35,31)
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // (36,24)->(47,31)
     0xFF, 0xFF, 0xFF, 0x7F, 0x3F, 0x1F, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, // (48,24)->(59,31)
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (60,24)->(71,31)
+  };
+
+ // PIC16LF1827 only has 386 bytes of RAM, this array alone is 506 bytes, so I'm using only 64% of it
+// until I get the LF1825 which has over 1K in memory :-P. (.64 = 324 entries of the original 504)
+/*
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (72,24)->(83,31)
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (0,32)->(11,39)
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (12,32)->(23,39)
@@ -260,11 +260,10 @@ static char LCD_Init[6];
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (60,40)->(71,47)
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (72,40)->(83,47) !!! The bottom right pixel!
   };
-*/
+ */
 
 
-
-/******* Function Prototypes ***************/
+/********* Function Prototypes ***************/
 
 void InitPorts(void);
 void InitTimers(void);
@@ -276,7 +275,8 @@ void SightPin_B0(void);
 void sendByte(char type, char byte);
 void updateDisplay(void);
 void gotoPixel(int x, int y);
-
+//void eraseDisplay();
+void Example(); 
 
 
 
@@ -292,12 +292,11 @@ void InitPorts()
 	TRISA = 0b00000000;		// 1 - input, 0 - output, RA2, RA0 are outputs
 	TRISB = 0b00000010;		// 1 - input, 0 - output, RB0, RB2 - RB6 is an output
 
-	PORTA = 0b11111110;			//RA0 - low
+	PORTA = 0b11111110;             //RA0 - low
 	PORTB = 0b11111111;
 
-	
-	//OSCCON = 0x68;
 	APFCON0 = 0x00;
+        //OSCCON = 0x00;
 	
 }
 
@@ -369,7 +368,7 @@ void interrupt ISR()
 void NokiaInit()
 {
 
-	i = 0; 
+	//i = 0;
 	// LCD_Init array populated with initialization sequence
 
 	LCD_Init[0] = 0x21;			// tell LCD extended commands to 
@@ -432,6 +431,32 @@ void updateDisplay()
     }
 }
 
+void gotoPixel(int x, int y)
+{
+    sendByte(lcd_command, 0x80 | x);        // column
+    sendByte(lcd_command, 0x40 | y);        // row
+}
+
+void setContrast(char contrast)
+{
+    PORTB &= BIT5LO;
+
+    sendByte(lcd_command, 0x21);
+    sendByte(lcd_command, 0x80 | contrast);
+    sendByte(lcd_command, 0x20);
+
+    PORTB |= BIT5HI; 
+
+
+}
+
+void Example()
+{
+
+    sendByte(lcd_data, 0x07);
+    sendByte(lcd_data, 0x00);
+}
+
 /***********************************************************/
 /******************** Debugging Library ********************/
 
@@ -466,7 +491,22 @@ void main ()
 	NokiaInit();
 	while(1)
 	{
-		//NokiaInit();
+            
+            PORTB &= BIT5LO;
+            updateDisplay();
+            setContrast(50);
+            PORTB |= BIT5HI;
+            Delay(30000);
+           
+            /*
+            PORTB &= BIT5LO;
+            Example();
+            setContrast(50);
+            PORTB |= BIT5HI;
+            Delay(30000);
+            */
+
+            NokiaInit(); 
 	}
 
 
