@@ -8,9 +8,6 @@ from a signal generator.
 
 author: Osagie Igbeare
 
-adapted from code by Jim Lindblom, who adapted code from Nathan Seidle and
-"mish-mashed" with code from the ColorLCDSheild
-
 8/7/2014
 
 *************************/
@@ -32,7 +29,6 @@ adapted from code by Jim Lindblom, who adapted code from Nathan Seidle and
 /**************** Header Files *********************/
 
 #include "BitDefs.h"
-//#include <htc.h>          // for HI Tech C compiler
 #include <xc.h>
 #include "pic.h"
 #include "chip_select.h"
@@ -72,10 +68,6 @@ adapted from code by Jim Lindblom, who adapted code from Nathan Seidle and
 #define lcd_command BIT3LO
 #define hangTime 1000
 
-#define LCD_Width 84        //x coordinates go wide
-#define LCD_Height 31       //y coordinates go high
-#define WHITE 0             // for drawing individual pixels, 0 draws white
-#define BLACK 1             // see above, 1 draws black
 
 /*************** module level variables ************/
 
@@ -85,6 +77,11 @@ int i = 0;
 static char LCD_Init[6];
 
 static unsigned int uPeriod;
+
+int waterCal = 19667;
+int twentyPer = 19235;
+int airCal = 18587;
+int moisture; 
 
 
 /********* Function Prototypes ***************/
@@ -97,6 +94,7 @@ void NokiaInit(void);
 void Delay(int waitTime); 
 void SightPin_B0(void);
 void sendByte(char type, char byte);
+void MoistureCalc(void);
 
 
 /******* Acutal Functions ****************/
@@ -137,11 +135,10 @@ void InitTimers()
                                          bit 4(T1GRPM) = 0; single pulse mode disabled
                                          bit 3(T1GGO) = 0; clear when bit 4 is clear
                                          bit 2(T1GVAL) = read only
-                                         bit <1:0>(T1GSS) = 00;
-
+                                         bit <1:0>(T1GSS) = 00; TMR1 gate pin
                                          *******************************************/
 
-        CCP1CON = 0b1110100;            //capture mode: every falling edge
+        CCP1CON = 0b0110100;            //capture mode: every falling edge
 
 
         T2CON = 0b01111110;		// Fosc / (4 instruct * 16 prescale * 16 postscale * 60 PR2) = 65 Hz
@@ -154,7 +151,7 @@ void InitInterrupts()
 	PIE1 = 0b00000110; 		// Enable TMR2IE, interrupt when Timer 2 matches PR2
 					// Enable CCP1 interrupt
 
-	INTCON = 0b11000000;	// Enable GIE, Enable PEIE
+	INTCON = 0b11000000;            // Enable GIE, Enable PEIE
 	
 }
 
@@ -279,6 +276,45 @@ void sendByte (char type, char byte)
 	SSP1BUF = byte; 
 
 	while (!SSP1STATbits.BF); 
+
+
+}
+
+void MoistureCalc(void)
+{
+    int x;
+
+    if (uPeriod < airCal)
+    {
+        x = airCal;
+        
+        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
+
+    }
+
+    if (uPeriod <= twentyPer)
+    {
+        x = ((uPeriod - airCal)*100)/(twentyPer - airCal);
+
+        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
+    }
+
+
+    if (uPeriod > twentyPer)
+    {
+        x = ((uPeriod - twentyPer)*50)/((waterCal-twentyPer)+100);
+
+        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
+
+    }
+
+    if (uPeriod > waterCal)
+    {
+        x = waterCal;
+
+        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
+
+    }
 
 
 }
