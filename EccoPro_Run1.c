@@ -92,7 +92,8 @@ void InitInterrupts(void);
 void InitComm(void);
 void NokiaInit(void);
 void Delay(int waitTime); 
-void SightPin_B0(void);
+void SightPin_A2(void);
+void SightPin_A3(void);
 void sendByte(char type, char byte);
 void MoistureCalc(void);
 
@@ -105,23 +106,23 @@ void InitPorts()
 	ANSELA = 0x00;			// Port A pins are digital
 	ANSELB = 0x00;			// Port B pins are digital
 
-	TRISA = 0b00000000;		// 1 - input, 0 - output, RA2, RA0 are outputs
+	TRISA = 0b00000000;		// 1 - input, 0 - output, all A pins are outputs 
 	TRISB = 0b00000011;		// 1 - input, 0 - output, RB0 is an input, it's the input capture pin
 
-	PORTA = 0b11111110;             //RA0 - low
-	PORTB = 0b11111111;
+	PORTA = 0b11110110;             //RA0 - low
+	//PORTB = 0b11111111;
 
 	APFCON0 = 0x00;
-        //OSCCON = 0x00;
+        //OSCCON = 0b10000010;
 	
 }
 
 void InitTimers()
 {
-        T1CON = 0b00110011;             /********************************************
+        T1CON = 0b01000011;             /********************************************
                                          bits <7:6>(TMR1CS) = 00; TMR1 clk source is instruction clk
-                                         bits <5:4>(T1CKPS) = 11; divide by 8 prescale
-                                         bit    3  (T1OSCEN)= 0;  TMR1 oscillator disabled
+                                         bits <5:4>(T1CKPS) = 00; divide by 1 prescale
+                                         bit    3  (T1OSCEN)= 1;  TMR1 oscillator disabled
                                          bit    2  (T1SYNC) = 0; synchronize external clk with
                                                                  sys clock
                                          bit    1           = unimplemented
@@ -138,7 +139,7 @@ void InitTimers()
                                          bit <1:0>(T1GSS) = 00; TMR1 gate pin
                                          *******************************************/
 
-        CCP1CON = 0b0110100;            //capture mode: every falling edge
+        CCP1CON = 0b00110100;            //capture mode: every falling edge
 
 
         T2CON = 0b01111110;		// Fosc / (4 instruct * 16 prescale * 16 postscale * 60 PR2) = 65 Hz
@@ -150,6 +151,7 @@ void InitInterrupts()
 
 	PIE1 = 0b00000110; 		// Enable TMR2IE, interrupt when Timer 2 matches PR2
 					// Enable CCP1 interrupt
+        CCP1IF = 0;
 
 	INTCON = 0b11000000;            // Enable GIE, Enable PEIE
 	
@@ -208,6 +210,8 @@ void interrupt ISR()
             char highByte;
             char lowByte;
             int CCPR1_Snapshot;
+
+            SightPin_A3();
 
             highByte = CCPR1H;
             lowByte = CCPR1L;
@@ -322,17 +326,32 @@ void MoistureCalc(void)
 /***********************************************************/
 /******************** Debugging Library ********************/
 
-void SightPin_B0(void)
+void SightPin_A4(void)
 {
-	// toggles pin B0 for debugging purposes
-	if ((PORTB & BIT0HI) == BIT0HI)
+	// toggles pin A2 for debugging purposes
+	if ((PORTA & BIT4HI) == BIT4HI)
 	{
-		PORTB &= BIT0LO;
+		PORTA &= BIT4LO;
 
 	}
 	else
 	{
-		PORTB |= BIT0HI; 
+		PORTA |= BIT4HI;
+	}
+
+}
+
+void SightPin_A3(void)
+{
+	// toggles pin A3 for debugging purposes
+	if ((PORTA & BIT3HI) == BIT3HI)
+	{
+		PORTA &= BIT3LO;
+
+	}
+	else
+	{
+		PORTA |= BIT3HI;
 	}
 
 }
@@ -354,7 +373,7 @@ void main ()
 	while(1)
 	{
 
-            NokiaInit(); 
+            //NokiaInit();
 	}
 
 
