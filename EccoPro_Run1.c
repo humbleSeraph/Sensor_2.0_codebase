@@ -44,7 +44,7 @@ author: Osagie Igbeare
 // Use project enums instead of #define for ON and OFF.
 
 // CONFIG1
-#pragma config FOSC = LP        // Oscillator Selection (LP Oscillator, Low-power crystal connected between OSC1 and OSC2 pins)
+#pragma config FOSC = XT        // Oscillator Selection (LP Oscillator, Low-power crystal connected between OSC1 and OSC2 pins)
 #pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
 #pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
 #pragma config MCLRE = ON       // MCLR Pin Function Select (MCLR/VPP pin function is MCLR)
@@ -81,7 +81,8 @@ static unsigned int uPeriod;
 int waterCal = 19667;
 int twentyPer = 19235;
 int airCal = 18587;
-int moisture; 
+int moisture;
+ 
 
 
 /********* Function Prototypes ***************/
@@ -119,10 +120,10 @@ void InitPorts()
 
 void InitTimers()
 {
-        T1CON = 0b01000011;             /********************************************
-                                         bits <7:6>(TMR1CS) = 00; TMR1 clk source is instruction clk
+        T1CON = 0b01110011;             /********************************************
+                                         bits <7:6>(TMR1CS) = 01; TMR1 clk source is Fosc
                                          bits <5:4>(T1CKPS) = 00; divide by 1 prescale
-                                         bit    3  (T1OSCEN)= 1;  TMR1 oscillator disabled
+                                         bit    3  (T1OSCEN)= 0;  TMR1 oscillator disabled
                                          bit    2  (T1SYNC) = 0; synchronize external clk with
                                                                  sys clock
                                          bit    1           = unimplemented
@@ -143,7 +144,7 @@ void InitTimers()
 
 
         T2CON = 0b01111110;		// Fosc / (4 instruct * 16 prescale * 16 postscale * 60 PR2) = 65 Hz
-	PR2 = 1;
+	PR2 = 250;
 }
 
 void InitInterrupts()
@@ -219,6 +220,15 @@ void interrupt ISR()
 
             uPeriod = CCPR1_Snapshot - uLastEdge;
             uLastEdge = CCPR1_Snapshot;
+
+            //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
+
+            if (uPeriod == 0)
+            {
+
+                uPeriod = 23;
+            }
+            //twentyPer = uPeriod;
 
             CCP1IF = 0; 
 
@@ -318,6 +328,11 @@ void MoistureCalc(void)
 
         moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
 
+    }
+
+    if (uPeriod == 0)
+    {
+        uPeriod = 0; 
     }
 
 
