@@ -7,8 +7,10 @@ First going to get input caputure working with inputs
 from a signal generator.
 
 author: Osagie Igbeare
-
 8/7/2014
+
+Modified by: joshuafrancis80@gmail.com
+Date: 9/1/2014
 
 *************************/
 
@@ -44,8 +46,8 @@ author: Osagie Igbeare
 // Use project enums instead of #define for ON and OFF.
 
 // CONFIG1
-#pragma config FOSC = XT        // Oscillator Selection (LP Oscillator, Low-power crystal connected between OSC1 and OSC2 pins)
-#pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
+#pragma config FOSC = XT        // Oscillator Selection (XT Oscillator, Crystal/resonator connected between OSC1 and OSC2 pins)
+#pragma config WDTE = ON    // Watchdog Timer Enable (WDT controlled by the SWDTEN bit in the WDTCON register)
 #pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
 #pragma config MCLRE = ON       // MCLR Pin Function Select (MCLR/VPP pin function is MCLR)
 #pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled)
@@ -74,7 +76,7 @@ author: Osagie Igbeare
 static char counter; 
 int x;
 int i = 0; 
-static char LCD_Init[6];
+//static char LCD_Init[6];
 
 static unsigned int uPeriod;
 
@@ -90,12 +92,13 @@ int moisture;
 void InitPorts(void);
 void InitTimers(void);
 void InitInterrupts(void);
-void InitComm(void);
-void NokiaInit(void);
-void Delay(int waitTime); 
+void WatchDogTimer(void);
+//void InitComm(void);
+//void NokiaInit(void);
+//void Delay(int waitTime);
 void SightPin_A2(void);
 void SightPin_A3(void);
-void sendByte(char type, char byte);
+//void sendByte(char type, char byte);
 void MoistureCalc(void);
 
 
@@ -110,10 +113,10 @@ void InitPorts()
 	TRISA = 0b00000000;		// 1 - input, 0 - output, all A pins are outputs 
 	TRISB = 0b00000011;		// 1 - input, 0 - output, RB0 is an input, it's the input capture pin
 
-	PORTA = 0b11110110;             //RA0 - low
-	//PORTB = 0b11111111;
+	PORTA = 0b11100110;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
+	PORTB = 0b00000000;
 
-	APFCON0 = 0x00;
+	APFCON0 = 0x00;                 // Alternative pin function control register
         //OSCCON = 0b10000010;
 	
 }
@@ -122,43 +125,99 @@ void InitTimers()
 {
         T1CON = 0b01110011;             /********************************************
                                          bits <7:6>(TMR1CS) = 01; TMR1 clk source is Fosc
-                                         bits <5:4>(T1CKPS) = 00; divide by 1 prescale
+                                         bits <5:4>(T1CKPS) = 11; divide by 8 prescale
                                          bit    3  (T1OSCEN)= 0;  TMR1 oscillator disabled
                                          bit    2  (T1SYNC) = 0; synchronize external clk with
-                                                                 sys clock
+                                                                 sys clock (Fosc)
                                          bit    1           = unimplemented
                                          bit    0   (TMR1ON)= 1; TMR1 on
                                          *******************************************/
 
         T1GCON = 0b10000100;            /********************************************
                                          bit 7(TMR1GE) = 1; TMR1 contolled by gate function
-                                         bit 6(T1GPOL) = 0; TMR1 gate active low
+                                         bit 6(T1GPOL) = 0; TMR1 counts when gate is low
                                          bit 5(T1GTM) = 0; gate toggle is disabled
                                          bit 4(T1GRPM) = 0; single pulse mode disabled
                                          bit 3(T1GGO) = 0; clear when bit 4 is clear
-                                         bit 2(T1GVAL) = read only
+                                         bit 2(T1GVAL) = 1; current state of TMR1 gate
                                          bit <1:0>(T1GSS) = 00; TMR1 gate pin
                                          *******************************************/
 
         CCP1CON = 0b00110100;            //capture mode: every falling edge
-
+        //CCP1CON = 0b00000100;        //least 4 bits sets capture mode
 
         T2CON = 0b01111110;		// Fosc / (4 instruct * 16 prescale * 16 postscale * 60 PR2) = 65 Hz
-	PR2 = 250;
+                                         /********************************************
+                                         bit 7 unimplemented
+                                         bit <6:3>(TxOUTPS) = 1111; 1:16 postscaler
+                                         bit 2(TMR2ON) = 1; Timer2 is on
+                                         bit <1:0>(T1GSS) = 10; prescaler is 16
+                                         *******************************************/
+
+	PR2 = 250;  //Period Register; each clock cycle if TMR2 == PR2 then match signal to output and TMR2 = 00h
 }
 
+void WatchDogTimer() {
+
+                         //00010101 about 1 second
+    WDTCON = 0b00010101; //00100101 prescale 1:2^23 which is about 4.3 minutes
+    /*****************************
+     bit 7-6 Unimplemented
+     bit 5-1 WDTPS<4:0>: Watchdog Timer Period Select bits
+     bit 0 SWDTEN: Software Enable/Disable for Watchdog Timer bit
+     *****************************/
+
+}
+
+/* To enable interrupts the following bits of INTCON must be set: GIE and PEIE. And, the interrupt enable bits for
+   the specific interrupt events. The following happens when an interrupt event happens and GIE is set: current
+   prefetched instruction is flushed, GIE is cleared, PC pushed onto stack, critical registers saved to shadow
+   registers, PC is loaded with interrupt vector 0004h.
+ */
 void InitInterrupts()
 {
+        //Peripheral Interrupt Enable Register
+	PIE1 = 0b00000110; 		
+					/********************************************
+                                         bit 7(TMR1GIE) Timer1 Gate Interrupt Enable bit
+                                         bit 6(ADIE) A/D Converter (ADC) Interrupt Enable bit
+                                         bit 5(RCIE) USART Receive Interrupt Enable bit
+                                         bit 4(TXIE) USART Transmit Interrupt Enable bit
+                                         bit 3(SSP1IE) Synchronous Serial Port 1 (MSSP1)
+                                         bit 2(CCP1IE) CCP1 Interrupt Enable bit
+                                         bit 1(TMR2IE) TMR2 to PR2 Match Interrupt Enable bit
+                                         bit 0(TMR1IE) Timer1 Overflow Interrupt Enable bit
+                                         *******************************************/
 
-	PIE1 = 0b00000110; 		// Enable TMR2IE, interrupt when Timer 2 matches PR2
-					// Enable CCP1 interrupt
-        CCP1IF = 0;
+        CCP1IF = 0;                     // Interrupt request flag bit of the PIR1 register, this is set on capture
 
-	INTCON = 0b11000000;            // Enable GIE, Enable PEIE
-	
+	INTCON = 0b11000000;            
+                                         /********************************************
+                                         bit 7(GIE) = 1; Global Interrupt Enable bit
+                                         bit 6(PEIE) = 1; Peripheral Interrupt Enable bit
+                                         bit 5(TMR0IE) = 0; Timer0 Overflow Interrupt Enable bit
+                                         bit 4(INTE) = 0; INT External Interrupt Enable bit 
+                                         bit 3(IOCIE) = 0; Interrupt-on-Change Enable bit
+                                         bit 2(TMR0IF) = 0; Timer0 Overflow Interrupt FLag bit
+                                         bit 1(INTF) = 0; INT External Interrupt Flag bit
+                                         bit 0(IOCIF) = 0; Interrupt-on-Change Interrupt Flag bit
+                                         *******************************************/
+
+        //Peripheral Interrupt Request Register 1
+        //PIR1 = 0b00000000;
+                                         /********************************************
+                                         bit 7 TMR1GIF: Timer1 Gate Interrupt Flag bit
+                                         bit 6 ADIF: A/D Converter Interrupt Flag bit
+                                         bit 5 RCIF: USART Receive Interrupt Flag bit
+                                         bit 4 TXIF: USART Transmit Interrupt Flag bit 
+                                         bit 3 SSP1IF: Synchronous Serial Port 1 (MSSP1) Interrupt Flag bit
+                                         bit 2 CCP1IF: CCP1 Interrupt Flag bit
+                                         bit 1 TMR2IF: Timer2 to PR2 Interrupt Flag bit
+                                         bit 0 TMR1IF: Timer1 Overflow Interrupt Flag bit
+                                         *******************************************/
 }
 
-
+/*
 void InitComm()
 {
 	// setup SPI-1 (aka SSP) to communicate with Nokia LCD screen
@@ -180,24 +239,23 @@ void InitComm()
 	SSP1CON1bits.SSPM2 = 0;
 	SSP1CON1bits.SSPM1 = 0; 
 	SSP1CON1bits.SSPM0 = 0;
-       
-
 }
+*/
 
-
+/* First need to poll the interrupt flag bits to determine source of interrupt.*/
 void interrupt ISR()
 {
 	counter++;
-	if (TMR2IF)
+	if (TMR2IF) // PIR1<1>
 	{
 		if ((counter % 2) != 0)
 		{
-			PORTA |= BIT2HI;
+			PORTA |= BIT2HI; // 0b00000100
 
 		}
 		else
 		{
-			PORTA &= BIT2LO;
+			PORTA &= BIT2LO; // 0b11111011
 			counter = 0;
 		}
 
@@ -205,21 +263,21 @@ void interrupt ISR()
 
 	}
 
-        if (CCP1IF)
+        if (CCP1IF) // PIR1<2>
         {
             static unsigned int uLastEdge;
             char highByte;
             char lowByte;
             int CCPR1_Snapshot;
 
-            SightPin_A3();
+            SightPin_A3(); // debugging
 
-            highByte = CCPR1H;
-            lowByte = CCPR1L;
-            CCPR1_Snapshot = (highByte<<8) | lowByte;
+            highByte = CCPR1H; // CCPR1H captures value from TMR1H register
+            lowByte = CCPR1L; // CCPR1L captures value from TMR1L register
+            CCPR1_Snapshot = (highByte<<8) | lowByte; // combine into 16 bit int
 
             uPeriod = CCPR1_Snapshot - uLastEdge;
-            uLastEdge = CCPR1_Snapshot;
+            uLastEdge = CCPR1_Snapshot; // this variable should not be in scope next ISR
 
             //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
 
@@ -230,16 +288,16 @@ void interrupt ISR()
             }
             //twentyPer = uPeriod;
 
-            CCP1IF = 0; 
+            CCP1IF = 0; // clear the flag
 
 
         }
 
-}
+} //pop previous address from the stack, restore registers, set GIE bit
 
+/*
 void NokiaInit()
 {
-
 	//i = 0;
 	// LCD_Init array populated with initialization sequence
 
@@ -271,8 +329,9 @@ void NokiaInit()
 
 	PORTB |= BIT5HI;		// raising SCE line at the end of transmission0
 }
+ */
 
-void Delay(int waitTime)
+ void Delay(int waitTime)
 {
 	x = 0;
 	while(x < waitTime)
@@ -281,7 +340,8 @@ void Delay(int waitTime)
 	}
 }
 
-void sendByte (char type, char byte)
+ /*
+ void sendByte (char type, char byte)
 {
         PORTB &= type;           // tell the LCD commands are coming
 
@@ -290,9 +350,8 @@ void sendByte (char type, char byte)
 	SSP1BUF = byte; 
 
 	while (!SSP1STATbits.BF); 
-
-
 }
+*/
 
 void MoistureCalc(void)
 {
@@ -383,12 +442,18 @@ void main ()
 	InitPorts();
 	InitTimers();
 	InitInterrupts();
-	InitComm(); 
-	//NokiaInit();
+
 	while(1)
 	{
 
-            //NokiaInit();
+            PORTB &= BIT4LO; //makes LED on RB4 bright
+            for (x=0;x<3;x++) {SLEEP();} // will sleep x number of times
+            PORTB |= BIT4HI; //makes LED on RB4 dim
+            SLEEP();
+
+
+
+
 	}
 
 
