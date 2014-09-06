@@ -14,19 +14,6 @@ Date: 9/1/2014
 
 *************************/
 
-/******************* Pin Configuration *************
-
- Nokia 5110 LCD ----- < > ----- PIC16LF1827
-    1-Vcc       ---------------     3.3V
-    2-GND       ---------------     GND
-    3-SCE       ---------------     RB5
-    4-RST       ---------------     RA0
-    5-D/C       ---------------     RB3
-    6-DN(MOSI)  ---------------     RB2
-    7-SCLK      ---------------     RB4
-    8-LED       - 330 ohm res -     3.3V
-
- ***************************************************/
 
 /**************** Header Files *********************/
 
@@ -34,7 +21,6 @@ Date: 9/1/2014
 #include <xc.h>
 #include "pic.h"
 #include "chip_select.h"
-
 
 
 /***************** Configuration Macros ***************/
@@ -69,23 +55,29 @@ Date: 9/1/2014
 #define lcd_data BIT3HI
 #define lcd_command BIT3LO
 #define hangTime 1000
-
+#define total_values 24 //this is the total number of values that will be saved in the array
 
 /*************** module level variables ************/
 
 static char counter; 
-int x;
-int i = 0; 
-//static char LCD_Init[6];
+int x, y;
+int i = 0;
+int captureTracker = 0;
+
+//int total_values = 24; //set the total number of values to capture
+int moistureValues[total_values]; //array for moisture values
+int moistureChangeRate[total_values]; //array for change in moisture values
 
 static unsigned int uPeriod;
+static unsigned int rawInterval; 
 
 int waterCal = 19667;
 int twentyPer = 19235;
 int airCal = 18587;
-int moisture;
+int moisture = 0;
+int previous_moisture = 0;
+int saturation = 20;
  
-
 
 /********* Function Prototypes ***************/
 
@@ -93,13 +85,10 @@ void InitPorts(void);
 void InitTimers(void);
 void InitInterrupts(void);
 void WatchDogTimer(void);
-//void InitComm(void);
-//void NokiaInit(void);
-//void Delay(int waitTime);
 void SightPin_A2(void);
 void SightPin_A3(void);
-//void sendByte(char type, char byte);
 void MoistureCalc(void);
+void SetLEDsForWatering(void);
 
 
 /******* Acutal Functions ****************/
@@ -111,7 +100,7 @@ void InitPorts()
 	ANSELB = 0x00;			// Port B pins are digital
 
 	TRISA = 0b00000000;		// 1 - input, 0 - output, all A pins are outputs 
-	TRISB = 0b00000011;		// 1 - input, 0 - output, RB0 is an input, it's the input capture pin
+	TRISB = 0b00001011;		// 1 - input, 0 - output, RB0 is an input, it's the input capture pin
 
 	PORTA = 0b11100110;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
 	PORTB = 0b00000000;
@@ -217,33 +206,12 @@ void InitInterrupts()
                                          *******************************************/
 }
 
-/*
-void InitComm()
-{
-	// setup SPI-1 (aka SSP) to communicate with Nokia LCD screen
-
-	SSP1ADD = 2;			// Baud Rate = Fosc / ((SSP1ADD + 1)(4))
-							// since Fosc = 4 MHz, Baud Rate = 1 MHz
-							// since SSP1ADD = 0 is not supported same timing is achieved
-							// by setting bits <3:0> of SSPM all to 0's (see below)
-
-	SSP1STATbits.SMP = 0;				// data on rising edge, data @ middle
-	SSP1CON1bits.WCOL = 0; 	 			// no collision
-	SSP1CON1bits.SSPOV = 0; 			// no overflow
-	SSP1CON1bits.SSPEN = 1; 			// SSP Enable
-
-	SSP1CON1bits.CKP = 1; 				// idle high 
-	SSP1STATbits.CKE = 0;				// sample ? edges 
-
-	SSP1CON1bits.SSPM3 =  0;			// Set LF1827 as Master, clock rate Fosc / 4
-	SSP1CON1bits.SSPM2 = 0;
-	SSP1CON1bits.SSPM1 = 0; 
-	SSP1CON1bits.SSPM0 = 0;
-}
-*/
-
-/* First need to poll the interrupt flag bits to determine source of interrupt.*/
-void interrupt ISR()
+/* First need to poll the interrupt flag bits to determine source of interrupt.
+ * The two pulses we are looking for are separated by 100 to 200 miliseconds (ms),
+ * so we need the ISR to finish its work in probably less than 100 ms. The program
+ * will then return to the main function to wait out the rest of the delay and the
+ * ISR should be called again before it goes into sleep mode. */
+void interrupt ISR() // function needs to execute in <100ms
 {
 	counter++;
 	if (TMR2IF) // PIR1<1>
@@ -263,23 +231,42 @@ void interrupt ISR()
 
 	}
 
-        if (CCP1IF) // PIR1<2>
+        if (CCP1IF) // flag is in register PIR1<2>
         {
-            static unsigned int uLastEdge;
+
+
+            static unsigned int uLastEdge; 
             char highByte;
             char lowByte;
             int CCPR1_Snapshot;
 
-            SightPin_A3(); // debugging
+            captureTracker ++; //keeps track of how many captures have been done
+
+            //SightPin_A3(); // debugging
 
             highByte = CCPR1H; // CCPR1H captures value from TMR1H register
             lowByte = CCPR1L; // CCPR1L captures value from TMR1L register
+
+            //this is the time when the pulse from the sensor arrived
             CCPR1_Snapshot = (highByte<<8) | lowByte; // combine into 16 bit int
 
             uPeriod = CCPR1_Snapshot - uLastEdge;
             uLastEdge = CCPR1_Snapshot; // this variable should not be in scope next ISR
 
-            //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
+            
+            /*
+            if ((captureTracker % 2) != 0)
+		{
+                        uPeriod = uPeriod;
+
+            }
+		else
+		{
+                        rawInterval = uPeriod;
+			//captureTracker = 0;
+		}
+            */
+
 
             if (uPeriod == 0)
             {
@@ -288,114 +275,74 @@ void interrupt ISR()
             }
             //twentyPer = uPeriod;
 
+            //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
+            TMR1H = 0;
+            TMR1L = 0;
+
             CCP1IF = 0; // clear the flag
-
-
         }
 
 } //pop previous address from the stack, restore registers, set GIE bit
 
-/*
-void NokiaInit()
-{
-	//i = 0;
-	// LCD_Init array populated with initialization sequence
-
-	LCD_Init[0] = 0x21;			// tell LCD extended commands to 
-	LCD_Init[1] = 0xE0;			// set LCD Vop (contrast) ** parameter to mess with if screen doesn't display ****
-	LCD_Init[2] = 0x04;			// set temp coefficient
-	LCD_Init[3] = 0x13;			// LCD Bias mode 1:48 (if not working, try 0x13)
-	LCD_Init[4] = 0x20;			// back to regular commands
-	LCD_Init[5] = 0x0C;			// enable normal display (dark on light), horiz addressing
-
-
-	// initialization sequence for the PCD8544 driver on the Nokia LCD
-	// starting off with RESET
-	
-	PORTA &= BIT0LO;
-	Delay(hangTime); 
-	PORTA |= BIT0HI;
-
-        // the rest of the initialization sequence
-	
-	//PORTB &= lcd_command;           // tell LCD commands are coming
-	
-	PORTB &= BIT5LO;		// lower SCE line to begin transmission
-	
-	for (i=0; i<6; i++)             // sending 6 commands to the LCD screen
-	{
-		sendByte(lcd_command, LCD_Init[i]);
-	}	
-
-	PORTB |= BIT5HI;		// raising SCE line at the end of transmission0
-}
- */
-
- void Delay(int waitTime)
-{
-	x = 0;
-	while(x < waitTime)
-	{
-            x += 1;
-	}
-}
-
- /*
- void sendByte (char type, char byte)
-{
-        PORTB &= type;           // tell the LCD commands are coming
-
-        PIR1bits.SSP1IF = 0;
-
-	SSP1BUF = byte; 
-
-	while (!SSP1STATbits.BF); 
-}
-*/
 
 void MoistureCalc(void)
 {
+    //this gives the next index for the arrays
+    //int next_index = (captureTracker / 2) - 1; //can also use left shift ">>1"
+
+    moisture = 25; //arbitrarily set value
+   
+    /*
     int x;
 
-    if (uPeriod < airCal)
+    if (rawInterval < airCal)
     {
         x = airCal;
         
-        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
+        moisture = ((rawInterval - airCal)*x )/((twentyPer - airCal)*100);
 
     }
 
-    if (uPeriod <= twentyPer)
+    if (rawInterval <= twentyPer)
     {
-        x = ((uPeriod - airCal)*100)/(twentyPer - airCal);
+        x = ((rawInterval - airCal)*100)/(twentyPer - airCal);
 
-        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
+        moisture = ((rawInterval - airCal)*x )/((twentyPer - airCal)*100);
     }
 
 
-    if (uPeriod > twentyPer)
+    if (rawInterval > twentyPer)
     {
-        x = ((uPeriod - twentyPer)*50)/((waterCal-twentyPer)+100);
+        x = ((rawInterval - twentyPer)*50)/((waterCal-twentyPer)+100);
 
-        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
+        moisture = ((rawInterval - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
 
     }
 
-    if (uPeriod > waterCal)
+    if (rawInterval > waterCal)
     {
         x = waterCal;
 
-        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
+        moisture = ((rawInterval - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
 
     }
+    */
 
-    if (uPeriod == 0)
-    {
-        uPeriod = 0; 
-    }
+    //add the value of capTrack - 2 to the base pointer of the array and dereference
+    //moistureValues[next_index] = moisture;
+    //moistureChangeRate[next_index] = moisture - previous_moisture;
 
+    previous_moisture = moisture;
 
 }
+
+void SetLEDsForWatering(void)
+{
+        if (moisture > saturation) {PORTB &= BIT5LO;} //RB5 port LED bright
+        else {PORTB |= BIT5HI;} //RB5 port LED dim
+  
+}
+
 
 /***********************************************************/
 /******************** Debugging Library ********************/
@@ -446,13 +393,41 @@ void main ()
 	while(1)
 	{
 
-            PORTB &= BIT4LO; //makes LED on RB4 bright
-            for (x=0;x<3;x++) {SLEEP();} // will sleep x number of times
+            //turn sensor on
+            //PORTB &= BIT4LO;
+            PORTB |= BIT4HI;
+
+            //PC stuck in loop until first capture (capTrack is an even number)
+            while (captureTracker % 2 == 0){PORTA |= BIT3HI;}//RA3 dim // even and 0 % 2 = 0
+     
+            //PC stuck in another loop until second capture (capTrack is an odd number)
+            while (captureTracker % 2 == 1){PORTA &= BIT3LO;}//RA4 dim //odd % 2 = 1
+
+            //turn off sensor
+            //PORTB |= BIT4HI; //turn the sensor off for the duration of the sleep cycle
+            PORTB &= BIT4LO;
+
+            //do calculation
+            MoistureCalc();
+
+            //turn on LEDs if need to water
+            SetLEDsForWatering();
+
+             //Put device to sleep and wait for the next time to take a measurment
+            //the sleep time is set by the postscaler of the WDT
+            for (y=0;y<4;y++) {SLEEP();} // will sleep x number of times
+
+            //start the count over when the array's are full
+            //capture tracker will be an even number at this point
+            //if (captureTracker == (2*total_values)) {captureTracker = 0;}
+
+
+            /* this code works to strobe an LED
+            PORTB &= BIT4LO; //makes LED on RB4 bright -- currenly 2.2V (Sensor Power)
+            for (y=0;y<2;y++) {SLEEP();} // will sleep x number of times
             PORTB |= BIT4HI; //makes LED on RB4 dim
-            SLEEP();
-
-
-
+            for (y=0;y<2;y++) {SLEEP();} // sleep x number of times
+            */
 
 	}
 
