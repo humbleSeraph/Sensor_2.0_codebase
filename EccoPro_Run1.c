@@ -55,7 +55,7 @@ Date: 9/1/2014
 #define lcd_data BIT3HI
 #define lcd_command BIT3LO
 #define hangTime 1000
-#define total_values 24 //this is the total number of values that will be saved in the array
+#define total_values 100 //this is the total number of values that will be saved in the array
 
 /*************** module level variables ************/
 
@@ -71,12 +71,12 @@ int moistureChangeRate[total_values]; //array for change in moisture values
 static unsigned int uPeriod;
 static unsigned int rawInterval; 
 
-int waterCal = 19667;
-int twentyPer = 19235;
-int airCal = 18587;
-int moisture = 0;
-int previous_moisture = 0;
-int saturation = 20;
+int waterCal = 19667; //where does this number come from?
+int twentyPer = 19235; //where does this number come from?
+int airCal = 18587; //where does this number come from?
+int moisture = 0; //initialized to zero, maybe this should be unsigned
+int previous_moisture = 0; //initialized to zero
+int target_value = 20; //I set this arbitrarily to test the code
  
 
 /********* Function Prototypes ***************/
@@ -268,77 +268,80 @@ void interrupt ISR() // function needs to execute in <100ms
             */
 
 
-            if (uPeriod == 0)
-            {
-
-                uPeriod = 23;
-            }
+            if (uPeriod == 0) { uPeriod = 23; }
             //twentyPer = uPeriod;
 
             //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
+            //the datasheet says to stop the timer before writing to below registers
             TMR1H = 0;
             TMR1L = 0;
 
             CCP1IF = 0; // clear the flag
         }
 
-} //pop previous address from the stack, restore registers, set GIE bit
+} //pops previous address from the stack, restores registers, and sets GIE bit
 
 
 void MoistureCalc(void)
 {
-    //this gives the next index for the arrays
-    //int next_index = (captureTracker / 2) - 1; //can also use left shift ">>1"
+    
+    /* The following moisture calculation section is commented out until we
+     * can understand how this calculation yields the percentage of water in
+     * the soil.
 
-    moisture = 25; //arbitrarily set value
-   
-    /*
     int x;
 
-    if (rawInterval < airCal)
+    if (uPeriod < airCal)
     {
         x = airCal;
         
-        moisture = ((rawInterval - airCal)*x )/((twentyPer - airCal)*100);
+        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
 
     }
 
-    if (rawInterval <= twentyPer)
+    if (uPeriod <= twentyPer)
     {
-        x = ((rawInterval - airCal)*100)/(twentyPer - airCal);
+        x = ((uPeriod - airCal)*100)/(twentyPer - airCal);
 
-        moisture = ((rawInterval - airCal)*x )/((twentyPer - airCal)*100);
+        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
     }
 
 
-    if (rawInterval > twentyPer)
+    if (uPeriod > twentyPer)
     {
-        x = ((rawInterval - twentyPer)*50)/((waterCal-twentyPer)+100);
+        x = ((uPeriod - twentyPer)*50)/((waterCal-twentyPer)+100);
 
-        moisture = ((rawInterval - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
+        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
 
     }
 
-    if (rawInterval > waterCal)
+    if (uPeriod > waterCal)
     {
         x = waterCal;
 
-        moisture = ((rawInterval - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
+        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
 
     }
     */
 
-    //add the value of capTrack - 2 to the base pointer of the array and dereference
-    //moistureValues[next_index] = moisture;
-    //moistureChangeRate[next_index] = moisture - previous_moisture;
+    //set the value of the moisture, should be a number from 0 to 100
+    moisture = 25; //this will be a formula based on the characterization curve
 
+    //this gives the next index for the arrays
+    int next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
+
+    //add the next moisture value and rate change to the arrays
+    moistureValues[next_index] = moisture;
+    moistureChangeRate[next_index] = moisture - previous_moisture;
+
+    //save the current moisture reading to calculate the rate change
     previous_moisture = moisture;
 
 }
 
-void SetLEDsForWatering(void)
+void SetLEDsForWatering(void) // must account for rate of watering.
 {
-        if (moisture > saturation) {PORTB &= BIT5LO;} //RB5 port LED bright
+        if (moisture < target_value) {PORTB &= BIT5LO;} //RB5 port LED bright
         else {PORTB |= BIT5HI;} //RB5 port LED dim
   
 }
@@ -422,7 +425,7 @@ void main ()
             //if (captureTracker == (2*total_values)) {captureTracker = 0;}
 
 
-            /* this code works to strobe an LED
+            /* this code works to strobe an LED connected to RB4
             PORTB &= BIT4LO; //makes LED on RB4 bright -- currenly 2.2V (Sensor Power)
             for (y=0;y<2;y++) {SLEEP();} // will sleep x number of times
             PORTB |= BIT4HI; //makes LED on RB4 dim
