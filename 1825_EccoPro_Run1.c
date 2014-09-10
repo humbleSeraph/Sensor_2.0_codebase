@@ -1,10 +1,10 @@
 /************************
 
-This is a module to program the PIC16LF1827 get data from
+This is a module to program the PIC16LF1825 get data from
 the ECCO Pro sensor and output a moisture reading.
 
 First going to get input caputure working with inputs
-from a signal generator.
+from a signal generator. Josh has since gotten this to corr
 
 author: Osagie Igbeare
 8/7/2014
@@ -146,8 +146,7 @@ void InitTimers()
                                          bit <1:0>(T1GSS) = 10; prescaler is 16
                                          *******************************************/
 
-	PR2 = 250
-                ;  //Period Register; each clock cycle if TMR2 == PR2 then match signal to output and TMR2 = 00h
+	PR2 = 250;
 }
 
 void WatchDogTimer() {
@@ -162,11 +161,7 @@ void WatchDogTimer() {
 
 }
 
-/* To enable interrupts the following bits of INTCON must be set: GIE and PEIE. And, the interrupt enable bits for
-   the specific interrupt events. The following happens when an interrupt event happens and GIE is set: current
-   prefetched instruction is flushed, GIE is cleared, PC pushed onto stack, critical registers saved to shadow
-   registers, PC is loaded with interrupt vector 0004h.
- */
+
 void InitInterrupts()
 {
         //Peripheral Interrupt Enable Register
@@ -196,29 +191,12 @@ void InitInterrupts()
                                          bit 0(IOCIF) = 0; Interrupt-on-Change Interrupt Flag bit
                                          *******************************************/
 
-        //Peripheral Interrupt Request Register 1
-        //PIR1 = 0b00000000;
-                                         /********************************************
-                                         bit 7 TMR1GIF: Timer1 Gate Interrupt Flag bit
-                                         bit 6 ADIF: A/D Converter Interrupt Flag bit
-                                         bit 5 RCIF: USART Receive Interrupt Flag bit
-                                         bit 4 TXIF: USART Transmit Interrupt Flag bit 
-                                         bit 3 SSP1IF: Synchronous Serial Port 1 (MSSP1) Interrupt Flag bit
-                                         bit 2 CCP1IF: CCP1 Interrupt Flag bit
-                                         bit 1 TMR2IF: Timer2 to PR2 Interrupt Flag bit
-                                         bit 0 TMR1IF: Timer1 Overflow Interrupt Flag bit
-                                         *******************************************/
 }
 
-/* First need to poll the interrupt flag bits to determine source of interrupt.
- * The two pulses we are looking for are separated by 100 to 200 miliseconds (ms),
- * so we need the ISR to finish its work in probably less than 100 ms. The program
- * will then return to the main function to wait out the rest of the delay and the
- * ISR should be called again before it goes into sleep mode. */
 void interrupt ISR() // function needs to execute in <100ms
 {
 	counter++;
-	if (TMR2IF) // PIR1<1>
+	if (TMR2IF) 
 	{
 		if ((counter % 2) != 0)
 		{
