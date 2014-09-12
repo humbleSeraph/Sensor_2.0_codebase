@@ -103,20 +103,20 @@ void InitPorts()
 	ANSELC = 0x00;			// Port C pins are digital
   
 
-	TRISA = 0b00111010;		// 1 - input, 0 - output; (?) - can be used for something else
+	TRISA = 0b00111110;		// 1 - input, 0 - output; (?) - can be used for something else
                                          /********************************
                                           A0 - output - Tx pin
                                           (?)A1 - input - Rx pin
-                                          A2 - output - drives "water" LEDs
+                                          A2 - input - data transfer button
                                           A3 - doesn't matter - MCLR pin
                                           A4 - doesn't matter - CLKOut pin
                                           A5 - doesn't matter - CLCKIn pin
                                           ********************************/
 
-	TRISC = 0b00100011;		// 1 - input, 0 - output
+	TRISC = 0b00100001;		// 1 - input, 0 - output
                                         /**********************************
                                          C0 - input - data transfer button
-                                         C1 - input - demo mode button
+                                         C1 - output - demo mode button
                                          C2 - output - drives "stop water" LEDs
                                          (?) C3 - output- while loop indicator
                                          C4 - output - turns on Ecco
@@ -236,12 +236,12 @@ void interrupt ISR() // function needs to execute in <100ms
 	{
 		if ((counter % 2) != 0)
 		{
-			PORTA |= BIT2HI; // 0b00000100
+			PORTC |= BIT1HI; // 0b00000100
 
 		}
 		else
 		{
-			PORTA &= BIT2LO; // 0b11111011
+			PORTC &= BIT1LO; // 0b11111011
 			counter = 0;
 		}
 
@@ -282,21 +282,21 @@ void interrupt ISR() // function needs to execute in <100ms
             CCP1IF = 0; // clear the flag
         }
 
-        if (INTF) // check to see if button (RC0) was pushed
+        if (INTF) // check to see if button (RA2) was pushed
         {
             // turn on LED
-            if ((PORTC & BIT0LO) == BIT0LO)
+            if ((PORTA & BIT2LO) == BIT2LO)
             {
-            SightPin_C2();
+            //SightPin_C2();
             
             if ((tick % 2) != 0)
 		{
-			PORTC |= BIT1HI; // 0b00000100
+			PORTC |= BIT2HI; // 0b00000100
 
 		}
 		else
 		{
-			PORTC &= BIT1LO; // 0b11111011
+			PORTC &= BIT2LO; // 0b11111011
 			tick = 0;
 		}
 
