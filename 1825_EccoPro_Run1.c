@@ -4,7 +4,8 @@ This is a module to program the PIC16LF1825 get data from
 the ECCO Pro sensor and output a moisture reading.
 
 First going to get input caputure working with inputs
-from a signal generator. Josh has since gotten this to corr
+from a signal generator. Josh has since gotten this to correctly receieve
+data from Ecco Pro sensor
 
 author: Osagie Igbeare
 8/7/2014
@@ -63,6 +64,7 @@ static char counter;
 int x, y;
 int i = 0;
 int captureTracker = 0;
+int tick = 0; 
 
 //int total_values = 24; //set the total number of values to capture
 int moistureValues[total_values]; //array for moisture values
@@ -84,6 +86,7 @@ int target_value = 20; //I set this arbitrarily to test the code
 void InitPorts(void);
 void InitTimers(void);
 void InitInterrupts(void);
+void InitComm(void);
 void WatchDogTimer(void);
 void SightPin_C2(void);
 void SightPin_C1(void);
@@ -97,18 +100,35 @@ void InitPorts()
 {
 
 	ANSELA = 0x00;			// Port A pins are digital
-	ANSELC = 0x00;			// Port B pins are digital
+	ANSELC = 0x00;			// Port C pins are digital
   
 
-	TRISA = 0b00000000;		// 1 - input, 0 - output, all A pins are outputs 
-	TRISC = 0b00100000;		// 1 - input, 0 - output, RC5 is an input, it's the input capture pin
+	TRISA = 0b00111010;		// 1 - input, 0 - output; (?) - can be used for something else
+                                         /********************************
+                                          A0 - output - Tx pin
+                                          (?)A1 - input - Rx pin
+                                          A2 - output - drives "water" LEDs
+                                          A3 - doesn't matter - MCLR pin
+                                          A4 - doesn't matter - CLKOut pin
+                                          A5 - doesn't matter - CLCKIn pin
+                                          ********************************/
+
+	TRISC = 0b00100011;		// 1 - input, 0 - output
+                                        /**********************************
+                                         C0 - input - data transfer button
+                                         C1 - input - demo mode button
+                                         C2 - output - drives "stop water" LEDs
+                                         (?) C3 - output- while loop indicator
+                                         C4 - output - turns on Ecco
+                                         C5 - input - input capture pin
+                                         ********************************/
 
 
 
-	PORTA = 0b11100010;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
-	PORTC = 0b00000000;
+	PORTA = 0b00000000;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
+	PORTC = 0b00000001;
 
-	APFCON0 = 0x00;                 // Alternative pin function control register
+	APFCON0 = 0b10000100;           // Enables RA0 to be Tx pin, RA1 to be Rx pin (for EUSART)
         //OSCCON = 0b10000010;
 	
 }
@@ -161,6 +181,20 @@ void WatchDogTimer() {
 
 }
 
+void InitComm()
+{
+    // configuration for EUSART
+
+    BAUDCON = 0b00000000;   // bit 3 (BRG16) = 0; default setting, indcluded for clarity
+    SPBRG = 25;             // SPBRG = (Fosc / (16*BaudRate))-1; Fosc = 4MHz
+    SPBRGH = 0;
+    TXSTA = 0b00100100;     //TxEn set, BRGH set, 8 bit trans, asynchronous
+    RCSTA = 0b10010000;     //RxEn set, 8 bit receive, CREN set, no addr detection
+
+
+
+}
+
 
 void InitInterrupts()
 {
@@ -179,7 +213,7 @@ void InitInterrupts()
 
         CCP1IF = 0;                     // Interrupt request flag bit of the PIR1 register, this is set on capture
 
-	INTCON = 0b11000000;            
+	INTCON = 0b11001000;
                                          /********************************************
                                          bit 7(GIE) = 1; Global Interrupt Enable bit
                                          bit 6(PEIE) = 1; Peripheral Interrupt Enable bit
@@ -190,12 +224,14 @@ void InitInterrupts()
                                          bit 1(INTF) = 0; INT External Interrupt Flag bit
                                          bit 0(IOCIF) = 0; Interrupt-on-Change Interrupt Flag bit
                                          *******************************************/
+        INTF = 0;                       // clear IOC Flag 
 
 }
 
 void interrupt ISR() // function needs to execute in <100ms
 {
 	counter++;
+        tick++;
 	if (TMR2IF) 
 	{
 		if ((counter % 2) != 0)
@@ -216,7 +252,6 @@ void interrupt ISR() // function needs to execute in <100ms
         if (CCP1IF) // flag is in register PIR1<2>
         {
 
-
             static unsigned int uLastEdge; 
             char highByte;
             char lowByte;
@@ -224,7 +259,7 @@ void interrupt ISR() // function needs to execute in <100ms
 
             captureTracker ++; //keeps track of how many captures have been done
 
-            SightPin_C2(); // debugging
+            //SightPin_C2(); // debugging
 
             highByte = CCPR1H; // CCPR1H captures value from TMR1H register
             lowByte = CCPR1L; // CCPR1L captures value from TMR1L register
@@ -245,6 +280,30 @@ void interrupt ISR() // function needs to execute in <100ms
             TMR1L = 0;
 
             CCP1IF = 0; // clear the flag
+        }
+
+        if (INTF) // check to see if button (RC0) was pushed
+        {
+            // turn on LED
+            if ((PORTC & BIT0LO) == BIT0LO)
+            {
+            SightPin_C2();
+            
+            if ((tick % 2) != 0)
+		{
+			PORTC |= BIT1HI; // 0b00000100
+
+		}
+		else
+		{
+			PORTC &= BIT1LO; // 0b11111011
+			tick = 0;
+		}
+
+            INTF = 0;
+
+            }
+
         }
         
 
@@ -371,10 +430,10 @@ void main ()
             PORTC |= BIT4HI;
 
             //PC stuck in loop until first capture (capTrack is an even number)
-            while (captureTracker % 2 == 0){PORTC |= BIT0HI;}//RA3 dim // even and 0 % 2 = 0
+            while (captureTracker % 2 == 0){PORTC |= BIT3HI;}//RA3 dim // even and 0 % 2 = 0
      
             //PC stuck in another loop until second capture (capTrack is an odd number)
-            while (captureTracker % 2 == 1){PORTC &= BIT0LO;}//RA4 dim //odd % 2 = 1
+            while (captureTracker % 2 == 1){PORTC &= BIT3LO;}//RA4 dim //odd % 2 = 1
 
             //turn off sensor
             //PORTB |= BIT4HI; //turn the sensor off for the duration of the sleep cycle
