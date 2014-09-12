@@ -115,9 +115,9 @@ void InitPorts()
 
 	TRISC = 0b00100001;		// 1 - input, 0 - output
                                         /**********************************
-                                         C0 - input - data transfer button
+                                         C0 - input - 
                                          C1 - output - demo mode button
-                                         C2 - output - drives "stop water" LEDs
+                                         C2 - output - IOC LED check
                                          (?) C3 - output- while loop indicator
                                          C4 - output - turns on Ecco
                                          C5 - input - input capture pin
@@ -126,7 +126,7 @@ void InitPorts()
 
 
 	PORTA = 0b00000000;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
-	PORTC = 0b00000001;
+	PORTC = 0b00000101;
 
 	APFCON0 = 0b10000100;           // Enables RA0 to be Tx pin, RA1 to be Rx pin (for EUSART)
         //OSCCON = 0b10000010;
@@ -213,18 +213,18 @@ void InitInterrupts()
 
         CCP1IF = 0;                     // Interrupt request flag bit of the PIR1 register, this is set on capture
 
-	INTCON = 0b11001000;
+	INTCON = 0b11010000;
                                          /********************************************
                                          bit 7(GIE) = 1; Global Interrupt Enable bit
                                          bit 6(PEIE) = 1; Peripheral Interrupt Enable bit
                                          bit 5(TMR0IE) = 0; Timer0 Overflow Interrupt Enable bit
                                          bit 4(INTE) = 0; INT External Interrupt Enable bit 
-                                         bit 3(IOCIE) = 0; Interrupt-on-Change Enable bit
+                                         bit 3(IOCIE) = 1; Interrupt-on-Change Enable bit
                                          bit 2(TMR0IF) = 0; Timer0 Overflow Interrupt FLag bit
                                          bit 1(INTF) = 0; INT External Interrupt Flag bit
                                          bit 0(IOCIF) = 0; Interrupt-on-Change Interrupt Flag bit
                                          *******************************************/
-        INTF = 0;                       // clear IOC Flag 
+        INTF = 0;                       // clear IOC Flag
 
 }
 
@@ -308,7 +308,7 @@ void interrupt ISR() // function needs to execute in <100ms
         
 
 } //pops previous address from the stack, restores registers, and sets GIE bit
-
+//uint8_t myVar @0xD00;
 
 void MoistureCalc(void)
 {
@@ -430,10 +430,10 @@ void main ()
             PORTC |= BIT4HI;
 
             //PC stuck in loop until first capture (capTrack is an even number)
-            while (captureTracker % 2 == 0){PORTC |= BIT3HI;}//RA3 dim // even and 0 % 2 = 0
+            while (captureTracker % 2 == 0){PORTC &= BIT3LO;}//RA3 dim // even and 0 % 2 = 0
      
             //PC stuck in another loop until second capture (capTrack is an odd number)
-            while (captureTracker % 2 == 1){PORTC &= BIT3LO;}//RA4 dim //odd % 2 = 1
+            while (captureTracker % 2 == 1){PORTC |= BIT3HI;}//RA4 dim //odd % 2 = 1
 
             //turn off sensor
             //PORTB |= BIT4HI; //turn the sensor off for the duration of the sleep cycle
@@ -444,6 +444,11 @@ void main ()
 
             //turn on LEDs if need to water
             SetLEDsForWatering();
+
+            //while(!TXIF);
+
+            //TXREG = 0x77;
+
 
              //Put device to sleep and wait for the next time to take a measurment
             //the sleep time is set by the postscaler of the WDT
