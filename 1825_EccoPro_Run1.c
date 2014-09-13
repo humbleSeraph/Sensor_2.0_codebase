@@ -64,7 +64,7 @@ static char counter;
 int x, y;
 int i = 0;
 int captureTracker = 0;
-int tick = 0; 
+int tick = 1;
 
 //int total_values = 24; //set the total number of values to capture
 int moistureValues[total_values]; //array for moisture values
@@ -88,6 +88,7 @@ void InitTimers(void);
 void InitInterrupts(void);
 void InitComm(void);
 void WatchDogTimer(void);
+void IOC_Config(void);
 void SightPin_C2(void);
 void SightPin_C1(void);
 void MoistureCalc(void);
@@ -125,7 +126,7 @@ void InitPorts()
 
 
 
-	PORTA = 0b00000000;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
+	PORTA = 0b00000100;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
 	PORTC = 0b00000101;
 
 	APFCON0 = 0b10000100;           // Enables RA0 to be Tx pin, RA1 to be Rx pin (for EUSART)
@@ -213,7 +214,7 @@ void InitInterrupts()
 
         CCP1IF = 0;                     // Interrupt request flag bit of the PIR1 register, this is set on capture
 
-	INTCON = 0b11010000;
+	INTCON = 0b11001000;
                                          /********************************************
                                          bit 7(GIE) = 1; Global Interrupt Enable bit
                                          bit 6(PEIE) = 1; Peripheral Interrupt Enable bit
@@ -224,17 +225,26 @@ void InitInterrupts()
                                          bit 1(INTF) = 0; INT External Interrupt Flag bit
                                          bit 0(IOCIF) = 0; Interrupt-on-Change Interrupt Flag bit
                                          *******************************************/
-        INTF = 0;                       // clear IOC Flag
+       // IOCIF = 0;                       // clear IOC Flag
+
+}
+
+void IOC_Config()
+{
+    IOCAP = 0x00;                       // IOC for rising edge disabled for port A
+    IOCAN = 0b00000100;                 // IOC for falling edge enabled for A2
+    IOCAF = 0x00;                       // clear IOC flags for port A 
 
 }
 
 void interrupt ISR() // function needs to execute in <100ms
 {
-	counter++;
-        tick++;
+	
+       
 	if (TMR2IF) 
 	{
-		if ((counter % 2) != 0)
+                counter++;
+                if ((counter % 2) != 0)
 		{
 			PORTC |= BIT1HI; // 0b00000100
 
@@ -276,20 +286,23 @@ void interrupt ISR() // function needs to execute in <100ms
 
             //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
             //the datasheet says to stop the timer before writing to below registers
-            TMR1H = 0;
-            TMR1L = 0;
+            //TMR1H = 0;
+            //TMR1L = 0;
 
             CCP1IF = 0; // clear the flag
         }
 
-        if (INTF) // check to see if button (RA2) was pushed
+        if (IOCIF) // check to see if button (RA2) was pushed
         {
+            //INTCON &= BIT3LO;
             // turn on LED
-            if ((PORTA & BIT2LO) == BIT2LO)
+            if ((IOCAF & BIT2HI) == BIT2HI)
             {
             //SightPin_C2();
-            
-            if ((tick % 2) != 0)
+                TXREG = 0x77; 
+
+                tick++;
+                if ((tick % 2) != 0)
 		{
 			PORTC |= BIT2HI; // 0b00000100
 
@@ -300,7 +313,9 @@ void interrupt ISR() // function needs to execute in <100ms
 			tick = 0;
 		}
 
-            INTF = 0;
+            IOCAF &= BIT2LO;
+            IOCIF = 0;
+            INTCON |= BIT3HI; 
 
             }
 
@@ -419,7 +434,9 @@ void main ()
 	// Initializing PIC16LF1827
 	InitPorts();
 	InitTimers();
+        InitComm(); 
 	InitInterrupts();
+        IOC_Config(); 
 
 
         
