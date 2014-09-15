@@ -65,6 +65,8 @@ int x, y;
 int i = 0;
 int captureTracker = 0;
 int tick = 1;
+char dummy;
+int buttonPush = 0; 
 
 //int total_values = 24; //set the total number of values to capture
 int moistureValues[total_values]; //array for moisture values
@@ -299,7 +301,10 @@ void interrupt ISR() // function needs to execute in <100ms
             if ((IOCAF & BIT2HI) == BIT2HI)
             {
             //SightPin_C2();
-                TXREG = 0x77; 
+
+                buttonPush = 1;
+
+                INTCON &= BIT3LO;       // turn off IOCIE - interrupt on change
 
                 tick++;
                 if ((tick % 2) != 0)
@@ -313,9 +318,9 @@ void interrupt ISR() // function needs to execute in <100ms
 			tick = 0;
 		}
 
-            IOCAF &= BIT2LO;
-            IOCIF = 0;
-            INTCON |= BIT3HI; 
+                IOCAF &= BIT2LO;
+                IOCIF = 0;
+                INTCON |= BIT3HI;
 
             }
 
@@ -442,6 +447,21 @@ void main ()
         
 	while(1)
 	{
+            //function to check flag if true then send data
+            
+            if (buttonPush == 1)
+            {
+
+                for (int j = 0; j<30; j++)
+                {
+                    while (!TXIF);
+                    TXREG = moistureValues[j];
+                }
+
+                buttonPush = 0; 
+            }
+            
+
             //turn sensor on
             //PORTB &= BIT4LO;
             PORTC |= BIT4HI;
@@ -455,6 +475,8 @@ void main ()
             //turn off sensor
             //PORTB |= BIT4HI; //turn the sensor off for the duration of the sleep cycle
             PORTC &= BIT4LO;
+
+
 
             //do calculation
             MoistureCalc();
