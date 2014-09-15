@@ -66,7 +66,8 @@ int i = 0;
 int captureTracker = 0;
 int tick = 1;
 char dummy;
-int buttonPush = 0; 
+int buttonPush = 0;
+int next_index;
 
 //int total_values = 24; //set the total number of values to capture
 int moistureValues[total_values]; //array for moisture values
@@ -376,7 +377,7 @@ void MoistureCalc(void)
     moisture = 25; //this will be a formula based on the characterization curve
 
     //this gives the next index for the arrays
-    int next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
+    next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
 
     //add the next moisture value and rate change to the arrays
     moistureValues[next_index] = moisture;
@@ -452,7 +453,7 @@ void main ()
             if (buttonPush == 1)
             {
 
-                for (int j = 0; j<30; j++)
+                for (int j = 0; j<(next_index + 1); j++)
                 {
                     while (!TXIF);
                     TXREG = moistureValues[j];
