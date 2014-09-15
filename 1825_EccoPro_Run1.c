@@ -459,7 +459,8 @@ void main ()
                     TXREG = moistureValues[j];
                 }
 
-                buttonPush = 0; 
+                buttonPush = 0;
+                captureTracker = 0;
             }
             
 
