@@ -7,7 +7,7 @@ First going to get input caputure working with inputs
 from a signal generator. Josh has since gotten this to correctly receieve
 data from Ecco Pro sensor
 
-author: Osagie Igbeare
+author: Osagie Igbeare - o.igbeare@gmail.com
 8/7/2014
 
 Modified by: joshuafrancis80@gmail.com
@@ -53,10 +53,9 @@ Date: 9/1/2014
 
 
 /***************** # Defines *****************/
-#define lcd_data BIT3HI
-#define lcd_command BIT3LO
 #define hangTime 1000
 #define total_values 100 //this is the total number of values that will be saved in the array
+#define DREAM_TIME 4
 
 /*************** module level variables ************/
 
@@ -64,8 +63,6 @@ static char counter;
 int x, y;
 int i = 0;
 int captureTracker = 0;
-int tick = 1;
-char dummy;
 int buttonPush = 0;
 int next_index;
 
@@ -73,12 +70,8 @@ int next_index;
 int moistureValues[total_values]; //array for moisture values
 int moistureChangeRate[total_values]; //array for change in moisture values
 
-static unsigned int uPeriod;
-static unsigned int rawInterval; 
+static unsigned int uPeriod; 
 
-int waterCal = 19667; //where does this number come from?
-int twentyPer = 19235; //where does this number come from?
-int airCal = 18587; //where does this number come from?
 int moisture = 0; //initialized to zero, maybe this should be unsigned
 int previous_moisture = 0; //initialized to zero
 int target_value = 20; //I set this arbitrarily to test the code
@@ -244,7 +237,8 @@ void interrupt ISR() // function needs to execute in <100ms
 {
 	
        
-	if (TMR2IF) 
+	if (TMR2IF)
+
 	{
                 counter++;
                 if ((counter % 2) != 0)
@@ -272,7 +266,6 @@ void interrupt ISR() // function needs to execute in <100ms
 
             captureTracker ++; //keeps track of how many captures have been done
 
-            //SightPin_C2(); // debugging
 
             highByte = CCPR1H; // CCPR1H captures value from TMR1H register
             lowByte = CCPR1L; // CCPR1L captures value from TMR1L register
@@ -282,6 +275,10 @@ void interrupt ISR() // function needs to execute in <100ms
 
             uPeriod = CCPR1_Snapshot - uLastEdge;
             uLastEdge = CCPR1_Snapshot; // this variable should not be in scope next ISR
+
+            // above is a method to capture the values from the TMR1H and TMR1L register and combine
+            // them into a 16 bit integer. This 16 bit integer gives the "time reading" when the falling
+            // edge occurred.
 
 
             if (uPeriod == 0) { uPeriod = 23; }
@@ -297,31 +294,20 @@ void interrupt ISR() // function needs to execute in <100ms
 
         if (IOCIF) // check to see if button (RA2) was pushed
         {
-            //INTCON &= BIT3LO;
-            // turn on LED
+            
+      
             if ((IOCAF & BIT2HI) == BIT2HI)
             {
-            //SightPin_C2();
+            
 
                 buttonPush = 1;
 
                 INTCON &= BIT3LO;       // turn off IOCIE - interrupt on change
 
-                tick++;
-                if ((tick % 2) != 0)
-		{
-			PORTC |= BIT2HI; // 0b00000100
 
-		}
-		else
-		{
-			PORTC &= BIT2LO; // 0b11111011
-			tick = 0;
-		}
-
-                IOCAF &= BIT2LO;
+                IOCAF &= BIT2LO;        // clear IOC Flag for port A2
                 IOCIF = 0;
-                INTCON |= BIT3HI;
+                INTCON |= BIT3HI;       //Re-enable IOCIE interrupt 
 
             }
 
@@ -329,52 +315,18 @@ void interrupt ISR() // function needs to execute in <100ms
         
 
 } //pops previous address from the stack, restores registers, and sets GIE bit
-//uint8_t myVar @0xD00;
+
 
 void MoistureCalc(void)
 {
     
-    /* The following moisture calculation section is commented out until we
-     * can understand how this calculation yields the percentage of water in
-     * the soil.
-
-    int x;
-
-    if (uPeriod < airCal)
-    {
-        x = airCal;
-        
-        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
-
-    }
-
-    if (uPeriod <= twentyPer)
-    {
-        x = ((uPeriod - airCal)*100)/(twentyPer - airCal);
-
-        moisture = ((uPeriod - airCal)*x )/((twentyPer - airCal)*100);
-    }
-
-
-    if (uPeriod > twentyPer)
-    {
-        x = ((uPeriod - twentyPer)*50)/((waterCal-twentyPer)+100);
-
-        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
-
-    }
-
-    if (uPeriod > waterCal)
-    {
-        x = waterCal;
-
-        moisture = ((uPeriod - twentyPer)*(x-100))/ ((waterCal-twentyPer)*50);
-
-    }
-    */
-
     //set the value of the moisture, should be a number from 0 to 100
-    moisture = 25; //this will be a formula based on the characterization curve
+    //this will be a formula based on the characterization curve
+
+    /********************************************************************************/
+    /**********this is where to put new algorithm for for moisture calc**************/
+    /********************************************************************************/
+    moisture = (15*uPeriod) - 2399; 
 
     //this gives the next index for the arrays
     next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
@@ -390,8 +342,15 @@ void MoistureCalc(void)
 
 void SetLEDsForWatering(void) // must account for rate of watering.
 {
-        if (moisture < target_value) {PORTC &= BIT1LO;} //RB5 port LED bright
-        else {PORTC |= BIT1HI;} //RB5 port LED dim
+        if (moisture > target_value)
+        {
+            PORTA |= BIT2HI;        // turn on lights indicating "water"
+        }
+        else
+        {
+            PORTC |= BIT2HI;       // turn on lights indicating "stop watering"
+
+        }
   
 }
 
@@ -448,7 +407,7 @@ void main ()
         
 	while(1)
 	{
-            //function to check flag if true then send data
+            //function to check flag, if true then send data via bluetooth to paired computer
             
             if (buttonPush == 1)
             {
@@ -465,8 +424,9 @@ void main ()
             
 
             //turn sensor on
-            //PORTB &= BIT4LO;
-            PORTC |= BIT4HI;
+            // pull low - turns off NPN BJT - which then turns on Ecco
+          
+            PORTC &= BIT4LO;
 
             //PC stuck in loop until first capture (capTrack is an even number)
             while (captureTracker % 2 == 0){PORTC &= BIT3LO;}//RA3 dim // even and 0 % 2 = 0
@@ -475,10 +435,8 @@ void main ()
             while (captureTracker % 2 == 1){PORTC |= BIT3HI;}//RA4 dim //odd % 2 = 1
 
             //turn off sensor
-            //PORTB |= BIT4HI; //turn the sensor off for the duration of the sleep cycle
-            PORTC &= BIT4LO;
-
-
+            //pull high - turns on NPN BJT - turns Ecco off
+            PORTC |= BIT4HI;
 
             //do calculation
             MoistureCalc();
@@ -486,26 +444,11 @@ void main ()
             //turn on LEDs if need to water
             SetLEDsForWatering();
 
-            //while(!TXIF);
 
-            //TXREG = 0x77;
-
-
-             //Put device to sleep and wait for the next time to take a measurment
+            //Put device to sleep and wait for the next time to take a measurment
             //the sleep time is set by the postscaler of the WDT
-            for (y=0;y<4;y++) {SLEEP();} // will sleep x number of times
-
-            //start the count over when the array's are full
-            //capture tracker will be an even number at this point
-            //if (captureTracker == (2*total_values)) {captureTracker = 0;}
-
-
-            /* this code works to strobe an LED connected to RB4
-            PORTB &= BIT4LO; //makes LED on RB4 bright -- currenly 2.2V (Sensor Power)
-            for (y=0;y<2;y++) {SLEEP();} // will sleep x number of times
-            PORTB |= BIT4HI; //makes LED on RB4 dim
-            for (y=0;y<2;y++) {SLEEP();} // sleep x number of times
-            */
+            // DREAM_TIME is a #define and can be altered to alter how long mcu is asleep
+            for (y=0;y<DREAM_TIME;y++) {SLEEP();} // will sleep x number of times
 	}
 
 
