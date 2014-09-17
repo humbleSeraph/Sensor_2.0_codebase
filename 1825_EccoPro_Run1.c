@@ -26,9 +26,6 @@ Date: 9/1/2014
 
 /***************** Configuration Macros ***************/
 
-//__CONFIG(FCMEN_OFF & IESO_OFF & FOSC_LP & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BOREN_OFF
-//		& LVP_ON & WRT_OFF & CPD_OFF & CP_OFF);
-
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
 
@@ -276,13 +273,13 @@ void interrupt ISR() // function needs to execute in <100ms
             uPeriod = CCPR1_Snapshot - uLastEdge;
             uLastEdge = CCPR1_Snapshot; // this variable should not be in scope next ISR
 
+            /*********************************************************************************************/
             // above is a method to capture the values from the TMR1H and TMR1L register and combine
             // them into a 16 bit integer. This 16 bit integer gives the "time reading" when the falling
             // edge occurred.
 
 
-            if (uPeriod == 0) { uPeriod = 23; }
-            //twentyPer = uPeriod;
+            if (uPeriod == 0) { uPeriod = 23; }        // trick to get uPeriod to show up in MLBAB's Watches window
 
             //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
             //the datasheet says to stop the timer before writing to below registers
