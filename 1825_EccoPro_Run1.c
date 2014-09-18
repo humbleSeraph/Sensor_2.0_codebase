@@ -62,10 +62,11 @@ int i = 0;
 int captureTracker = 0;
 int buttonPush = 0;
 int next_index;
+int tick = 0;
 
 //int total_values = 24; //set the total number of values to capture
-int moistureValues[total_values]; //array for moisture values
-int moistureChangeRate[total_values]; //array for change in moisture values
+int moistureValues[total_values] = 0x00; //array for moisture values
+int moistureChangeRate[total_values] = 0x00; //array for change in moisture values
 
 static unsigned int uPeriod; 
 
@@ -107,9 +108,9 @@ void InitPorts()
                                           A5 - doesn't matter - CLCKIn pin
                                           ********************************/
 
-	TRISC = 0b00100001;		// 1 - input, 0 - output
+	TRISC = 0b00100000;		// 1 - input, 0 - output
                                         /**********************************
-                                         C0 - input - 
+                                         C0 - output -
                                          C1 - output - demo mode button
                                          C2 - output - IOC LED check
                                          (?) C3 - output- while loop indicator
@@ -120,7 +121,7 @@ void InitPorts()
 
 
 	PORTA = 0b00000100;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
-	PORTC = 0b00000101;
+	PORTC = 0b00001000;
 
 	APFCON0 = 0b10000100;           // Enables RA0 to be Tx pin, RA1 to be Rx pin (for EUSART)
         //OSCCON = 0b10000010;
@@ -237,7 +238,8 @@ void interrupt ISR() // function needs to execute in <100ms
 	if (TMR2IF)
 
 	{
-                counter++;
+            /*
+            counter++;
                 if ((counter % 2) != 0)
 		{
 			PORTC |= BIT1HI; // 0b00000100
@@ -248,6 +250,7 @@ void interrupt ISR() // function needs to execute in <100ms
 			PORTC &= BIT1LO; // 0b11111011
 			counter = 0;
 		}
+                */
 
 		TMR2IF = 0;		// clears the TIMR2IF (timer 2 interrupt flag)
 
@@ -301,6 +304,18 @@ void interrupt ISR() // function needs to execute in <100ms
 
                 INTCON &= BIT3LO;       // turn off IOCIE - interrupt on change
 
+                tick++;
+                if ((tick % 2) != 0)
+		{
+			PORTC |= BIT1HI; // 0b00000100
+
+		}
+		else
+		{
+			PORTC &= BIT1LO; // 0b11111011
+			tick = 0;
+		}
+
 
                 IOCAF &= BIT2LO;        // clear IOC Flag for port A2
                 IOCIF = 0;
@@ -341,11 +356,13 @@ void SetLEDsForWatering(void) // must account for rate of watering.
 {
         if (moisture > target_value)
         {
-            PORTA |= BIT2HI;        // turn on lights indicating "water"
+            PORTC |= BIT0HI;        // turn on lights indicating "water"
+            PORTC &= BIT2LO;
         }
         else
         {
             PORTC |= BIT2HI;       // turn on lights indicating "stop watering"
+            PORTC &= BIT0LO;
 
         }
   
@@ -423,7 +440,7 @@ void main ()
             //turn sensor on
             // pull low - turns off NPN BJT - which then turns on Ecco
           
-            PORTC &= BIT4LO;
+            PORTC |= BIT4HI;
 
             //PC stuck in loop until first capture (capTrack is an even number)
             while (captureTracker % 2 == 0){PORTC &= BIT3LO;}//RA3 dim // even and 0 % 2 = 0
@@ -433,7 +450,7 @@ void main ()
 
             //turn off sensor
             //pull high - turns on NPN BJT - turns Ecco off
-            PORTC |= BIT4HI;
+            PORTC = BIT4LO;
 
             //do calculation
             MoistureCalc();
