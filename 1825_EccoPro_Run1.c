@@ -7,7 +7,7 @@ First going to get input caputure working with inputs
 from a signal generator. Josh has since gotten this to correctly receieve
 data from Ecco Pro sensor
 
-author: Osagie Igbeare - o.igbeare@gmail.com
+author: Osagie Igbeare
 8/7/2014
 
 Modified by: joshuafrancis80@gmail.com
@@ -25,6 +25,9 @@ Date: 9/1/2014
 
 
 /***************** Configuration Macros ***************/
+
+//__CONFIG(FCMEN_OFF & IESO_OFF & FOSC_LP & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BOREN_OFF
+//		& LVP_ON & WRT_OFF & CPD_OFF & CP_OFF);
 
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
@@ -52,28 +55,31 @@ Date: 9/1/2014
 /***************** # Defines *****************/
 #define hangTime 1000
 #define total_values 100 //this is the total number of values that will be saved in the array
-#define DREAM_TIME 4
 
 /*************** module level variables ************/
 
-static char counter; 
+static char counter;
 int x, y;
 int i = 0;
 int captureTracker = 0;
+int tick = 1;
 int buttonPush = 0;
-int next_index;
-int tick = 0;
 
 //int total_values = 24; //set the total number of values to capture
 int moistureValues[total_values] = 0x00; //array for moisture values
-int moistureChangeRate[total_values] = 0x00; //array for change in moisture values
+int moistureChangeRate[total_values] =0x00; //array for change in moisture values
 
-static unsigned int uPeriod; 
+static unsigned int uPeriod;
+static unsigned int rawInterval;
 
+int waterCal = 19667; //where does this number come from?
+int twentyPer = 19235; //where does this number come from?
+int airCal = 18587; //where does this number come from?
 int moisture = 0; //initialized to zero, maybe this should be unsigned
 int previous_moisture = 0; //initialized to zero
 int target_value = 20; //I set this arbitrarily to test the code
- 
+int next_index;
+
 
 /********* Function Prototypes ***************/
 
@@ -96,7 +102,7 @@ void InitPorts()
 
 	ANSELA = 0x00;			// Port A pins are digital
 	ANSELC = 0x00;			// Port C pins are digital
-  
+
 
 	TRISA = 0b00111110;		// 1 - input, 0 - output; (?) - can be used for something else
                                          /********************************
@@ -121,11 +127,11 @@ void InitPorts()
 
 
 	PORTA = 0b00000100;             //Pins RA7 to RA0, 1 for VIH(>1.5V) and 0 for VIL(<0.5V)
-	PORTC = 0b00001000;
+	PORTC = 0b00000101;
 
 	APFCON0 = 0b10000100;           // Enables RA0 to be Tx pin, RA1 to be Rx pin (for EUSART)
         //OSCCON = 0b10000010;
-	
+
 }
 
 void InitTimers()
@@ -213,7 +219,7 @@ void InitInterrupts()
                                          bit 7(GIE) = 1; Global Interrupt Enable bit
                                          bit 6(PEIE) = 1; Peripheral Interrupt Enable bit
                                          bit 5(TMR0IE) = 0; Timer0 Overflow Interrupt Enable bit
-                                         bit 4(INTE) = 0; INT External Interrupt Enable bit 
+                                         bit 4(INTE) = 0; INT External Interrupt Enable bit
                                          bit 3(IOCIE) = 1; Interrupt-on-Change Enable bit
                                          bit 2(TMR0IF) = 0; Timer0 Overflow Interrupt FLag bit
                                          bit 1(INTF) = 0; INT External Interrupt Flag bit
@@ -227,19 +233,18 @@ void IOC_Config()
 {
     IOCAP = 0x00;                       // IOC for rising edge disabled for port A
     IOCAN = 0b00000100;                 // IOC for falling edge enabled for A2
-    IOCAF = 0x00;                       // clear IOC flags for port A 
+    IOCAF = 0x00;                       // clear IOC flags for port A
 
 }
 
 void interrupt ISR() // function needs to execute in <100ms
 {
-	
-       
-	if (TMR2IF)
 
+
+	if (TMR2IF)
 	{
-            /*
-            counter++;
+                /*
+                counter++;
                 if ((counter % 2) != 0)
 		{
 			PORTC |= BIT1HI; // 0b00000100
@@ -251,21 +256,21 @@ void interrupt ISR() // function needs to execute in <100ms
 			counter = 0;
 		}
                 */
-
 		TMR2IF = 0;		// clears the TIMR2IF (timer 2 interrupt flag)
 
 	}
-        
+
         if (CCP1IF) // flag is in register PIR1<2>
         {
 
-            static unsigned int uLastEdge; 
+            static unsigned int uLastEdge;
             char highByte;
             char lowByte;
             int CCPR1_Snapshot;
 
             captureTracker ++; //keeps track of how many captures have been done
 
+            //SightPin_C2(); // debugging
 
             highByte = CCPR1H; // CCPR1H captures value from TMR1H register
             lowByte = CCPR1L; // CCPR1L captures value from TMR1L register
@@ -276,13 +281,9 @@ void interrupt ISR() // function needs to execute in <100ms
             uPeriod = CCPR1_Snapshot - uLastEdge;
             uLastEdge = CCPR1_Snapshot; // this variable should not be in scope next ISR
 
-            /*********************************************************************************************/
-            // above is a method to capture the values from the TMR1H and TMR1L register and combine
-            // them into a 16 bit integer. This 16 bit integer gives the "time reading" when the falling
-            // edge occurred.
 
-
-            if (uPeriod == 0) { uPeriod = 23; }        // trick to get uPeriod to show up in MLBAB's Watches window
+            if (uPeriod == 0) { uPeriod = 23; }
+            //twentyPer = uPeriod;
 
             //maybe write 0 to the TMR1H and TMR1L bytes to ensure against rollover?
             //the datasheet says to stop the timer before writing to below registers
@@ -294,15 +295,13 @@ void interrupt ISR() // function needs to execute in <100ms
 
         if (IOCIF) // check to see if button (RA2) was pushed
         {
-            
-      
+            //INTCON &= BIT3LO;
+            // turn on LED
             if ((IOCAF & BIT2HI) == BIT2HI)
             {
-            
+            //SightPin_C2();
 
                 buttonPush = 1;
-
-                INTCON &= BIT3LO;       // turn off IOCIE - interrupt on change
 
                 tick++;
                 if ((tick % 2) != 0)
@@ -316,56 +315,55 @@ void interrupt ISR() // function needs to execute in <100ms
 			tick = 0;
 		}
 
-
-                IOCAF &= BIT2LO;        // clear IOC Flag for port A2
-                IOCIF = 0;
-                INTCON |= BIT3HI;       //Re-enable IOCIE interrupt 
+            IOCAF &= BIT2LO;
+            IOCIF = 0;
+            INTCON |= BIT3HI;
 
             }
 
         }
-        
+
 
 } //pops previous address from the stack, restores registers, and sets GIE bit
-
+//uint8_t myVar @0xD00;
 
 void MoistureCalc(void)
 {
-    
-    //set the value of the moisture, should be a number from 0 to 100
-    //this will be a formula based on the characterization curve
 
-    /********************************************************************************/
-    /**********this is where to put new algorithm for for moisture calc**************/
-    /********************************************************************************/
-    moisture = (15*uPeriod) - 2399; 
+    //set the value of the moisture, should be a number from 0 to 100
+    moisture = 25; //this will be a formula based on the characterization curve
 
     //this gives the next index for the arrays
     next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
 
     //add the next moisture value and rate change to the arrays
-    moistureValues[next_index] = moisture;
-    moistureChangeRate[next_index] = moisture - previous_moisture;
+    moistureValues[next_index] = uPeriod;
+    //moistureChangeRate[next_index] = moisture - previous_moisture;
 
     //save the current moisture reading to calculate the rate change
-    previous_moisture = moisture;
+    //previous_moisture = moisture;
 
 }
 
 void SetLEDsForWatering(void) // must account for rate of watering.
 {
-        if (moisture > target_value)
-        {
-            PORTC |= BIT0HI;        // turn on lights indicating "water"
-            PORTC &= BIT2LO;
-        }
-        else
-        {
-            PORTC |= BIT2HI;       // turn on lights indicating "stop watering"
-            PORTC &= BIT0LO;
+        /*
+        if (moisture < target_value) {PORTC &= BIT2LO; PORTC |= BIT0HI;} //Blue LEDs on, Yellow dim
+        else {PORTC |= BIT2HI; PORTC &= BIT0LO;} //Yellow LEDs on, Blue dim
+        */
 
-        }
-  
+        //try to figure out target values using uPeriod
+        if (uPeriod > 15000)
+        {
+            PORTC &= BIT2LO;
+            PORTC |= BIT0HI;
+        } //Blue LEDs dim, Yellow on
+        else 
+        {
+            PORTC |= BIT2HI;
+            PORTC &= BIT0LO;
+        } //Yellow LEDs dim, Blue on
+
 }
 
 
@@ -413,16 +411,14 @@ void main ()
 	// Initializing PIC16LF1827
 	InitPorts();
 	InitTimers();
-        InitComm(); 
+        InitComm();
 	InitInterrupts();
-        IOC_Config(); 
+        IOC_Config();
 
 
-        
+
 	while(1)
 	{
-            //function to check flag, if true then send data via bluetooth to paired computer
-            
             if (buttonPush == 1)
             {
 
@@ -435,22 +431,20 @@ void main ()
                 buttonPush = 0;
                 captureTracker = 0;
             }
-            
 
             //turn sensor on
-            // pull low - turns off NPN BJT - which then turns on Ecco
-          
+            //PORTB &= BIT4LO;
             PORTC |= BIT4HI;
 
             //PC stuck in loop until first capture (capTrack is an even number)
-            while (captureTracker % 2 == 0){PORTC &= BIT3LO;}//RA3 dim // even and 0 % 2 = 0
-     
+            while (captureTracker % 2 == 0){PORTC &= BIT3LO;}//RC3 bright // even and 0 % 2 = 0
+
             //PC stuck in another loop until second capture (capTrack is an odd number)
-            while (captureTracker % 2 == 1){PORTC |= BIT3HI;}//RA4 dim //odd % 2 = 1
+            while (captureTracker % 2 == 1){PORTC |= BIT3HI;}//RC3 dim //odd % 2 = 1
 
             //turn off sensor
-            //pull high - turns on NPN BJT - turns Ecco off
-            PORTC = BIT4LO;
+            //PORTB |= BIT4HI; //turn the sensor off for the duration of the sleep cycle
+            PORTC &= BIT4LO;
 
             //do calculation
             MoistureCalc();
@@ -459,10 +453,10 @@ void main ()
             SetLEDsForWatering();
 
 
-            //Put device to sleep and wait for the next time to take a measurment
+             //Put device to sleep and wait for the next time to take a measurment
             //the sleep time is set by the postscaler of the WDT
-            // DREAM_TIME is a #define and can be altered to alter how long mcu is asleep
-            for (y=0;y<DREAM_TIME;y++) {SLEEP();} // will sleep x number of times
+            for (y=0;y<4;y++) {SLEEP();} // will sleep x number of times
+
 	}
 
 
