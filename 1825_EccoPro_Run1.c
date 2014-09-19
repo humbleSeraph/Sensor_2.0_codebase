@@ -22,12 +22,12 @@ Date: 9/1/2014
 #include <xc.h>
 #include "pic.h"
 #include "chip_select.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 
 /***************** Configuration Macros ***************/
-
-//__CONFIG(FCMEN_OFF & IESO_OFF & FOSC_LP & WDTE_OFF & MCLRE_ON & PWRTE_OFF & BOREN_OFF
-//		& LVP_ON & WRT_OFF & CPD_OFF & CP_OFF);
 
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
@@ -66,19 +66,30 @@ int tick = 1;
 int buttonPush = 0;
 
 //int total_values = 24; //set the total number of values to capture
-int moistureValues[total_values] = 0x00; //array for moisture values
-int moistureChangeRate[total_values] =0x00; //array for change in moisture values
+int moistureValues[total_values] = {0x00}; //array for moisture values
+int moistureChangeRate[total_values] = {0x00}; //array for change in moisture values
+char buffer[20];
+char moisture[8];
+char printOut[8];
+
+
+char Tenthousandth;
+char Thousandth;
+char Hundredth;
+char Tenth;
+char One;
 
 static unsigned int uPeriod;
 static unsigned int rawInterval;
 
-int waterCal = 19667; //where does this number come from?
-int twentyPer = 19235; //where does this number come from?
-int airCal = 18587; //where does this number come from?
-int moisture = 0; //initialized to zero, maybe this should be unsigned
+//int moisture = 0; //initialized to zero, maybe this should be unsigned
 int previous_moisture = 0; //initialized to zero
 int target_value = 20; //I set this arbitrarily to test the code
 int next_index;
+
+char dummy; 
+
+
 
 
 /********* Function Prototypes ***************/
@@ -297,6 +308,7 @@ void interrupt ISR() // function needs to execute in <100ms
         {
             //INTCON &= BIT3LO;
             // turn on LED
+
             if ((IOCAF & BIT2HI) == BIT2HI)
             {
             //SightPin_C2();
@@ -331,13 +343,13 @@ void MoistureCalc(void)
 {
 
     //set the value of the moisture, should be a number from 0 to 100
-    moisture = 25; //this will be a formula based on the characterization curve
+    //moisture = 25; //this will be a formula based on the characterization curve
 
     //this gives the next index for the arrays
-    next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
+    //next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
 
     //add the next moisture value and rate change to the arrays
-    moistureValues[next_index] = uPeriod;
+    //moistureValues[next_index] = uPeriod;
     //moistureChangeRate[next_index] = moisture - previous_moisture;
 
     //save the current moisture reading to calculate the rate change
@@ -347,13 +359,16 @@ void MoistureCalc(void)
 
 void SetLEDsForWatering(void) // must account for rate of watering.
 {
+//<<<<<<< HEAD
+//=======
         /*
         if (moisture < target_value) {PORTC &= BIT2LO; PORTC |= BIT0HI;} //Blue LEDs on, Yellow dim
         else {PORTC |= BIT2HI; PORTC &= BIT0LO;} //Yellow LEDs on, Blue dim
         */
 
         //try to figure out target values using uPeriod
-        if (uPeriod > 15000)
+//>>>>>>> 7afe8ea439cef22d9c217155754c265dd20f3c67
+        if (uPeriod < 16000)
         {
             PORTC &= BIT2LO;
             PORTC |= BIT0HI;
@@ -415,22 +430,66 @@ void main ()
 	InitInterrupts();
         IOC_Config();
 
-
-
 	while(1)
 	{
+            buttonPush = 1;
             if (buttonPush == 1)
             {
+               /*
+                itoa(uPeriod,buffer,10);                //10 means decimal
+               
+               Tenthousandth = buffer[0];
+               Thousandth = buffer[1];
+               Hundredth = buffer[2];
+               Tenth = buffer[3];
+               One = buffer[4];
+               */
+                moisture[4] = (uPeriod % 10);
+                moisture[3] = ((uPeriod & 100)/10);
+                moisture[2] = ((uPeriod % 1000)/100);
+                moisture[1] = ((uPeriod % 10000)/1000);
+                moisture[0] = ((uPeriod % 100000) / 10000);
 
-                for (int j = 0; j<(next_index + 1); j++)
+                int q = moisture[0];
+                int r = moisture[1];
+                int s = moisture[2];
+                int t = moisture[3];
+                int u = moisture[4];
+                
+                char One = (char)(((int)'0')+q);
+                char Two = (char)(((int)'0')+r);
+                char Three = (char)(((int)'0')+s);
+                char Four = (char)(((int)'0')+t);
+                char Five = (char)(((int)'0')+u);
+
+
+
+                char nums[11] = {'a','b','c','d','e','f','g','h','i','j','l'};
+                for (int i=0; i<2; i++)
                 {
-                    while (!TXIF);
-                    TXREG = moistureValues[j];
+
+                    while(!TXIF);
+                    TXREG = One;
+                    while(!TXIF);
+                    TXREG = Two;
+                    while(!TXIF);
+                    TXREG = Three;
+                    while(!TXIF);
+                    TXREG = Four;
+                    while(!TXIF);
+                    TXREG = Five;
+                    while(!TXIF);
+                    TXREG = 0x20;
+
+
                 }
 
                 buttonPush = 0;
                 captureTracker = 0;
+                //nums[10] = 0x00;
             }
+     
+
 
             //turn sensor on
             //PORTB &= BIT4LO;
@@ -455,7 +514,7 @@ void main ()
 
              //Put device to sleep and wait for the next time to take a measurment
             //the sleep time is set by the postscaler of the WDT
-            for (y=0;y<4;y++) {SLEEP();} // will sleep x number of times
+            for (y=0;y<2;y++) {SLEEP();} // will sleep x number of times
 
 	}
 
