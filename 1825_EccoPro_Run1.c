@@ -66,18 +66,11 @@ int tick = 1;
 int buttonPush = 0;
 
 //int total_values = 24; //set the total number of values to capture
-int moistureValues[total_values] = {0x00}; //array for moisture values
-int moistureChangeRate[total_values] = {0x00}; //array for change in moisture values
+//int moistureValues[total_values] = {0x00}; //array for moisture values
+//int moistureChangeRate[total_values] = {0x00}; //array for change in moisture values
 char buffer[20];
 char moisture[8];
 char printOut[8];
-
-
-char Tenthousandth;
-char Thousandth;
-char Hundredth;
-char Tenth;
-char One;
 
 static unsigned int uPeriod;
 static unsigned int rawInterval;
@@ -141,7 +134,7 @@ void InitPorts()
 	PORTC = 0b00000101;
 
 	APFCON0 = 0b10000100;           // Enables RA0 to be Tx pin, RA1 to be Rx pin (for EUSART)
-        //OSCCON = 0b10000010;
+        
 
 }
 
@@ -168,7 +161,7 @@ void InitTimers()
                                          *******************************************/
 
         CCP1CON = 0b00110100;            //capture mode: every falling edge
-        //CCP1CON = 0b00000100;          //least 4 bits sets capture mode
+        
 
         T2CON = 0b01111110;		// Fosc / (4 instruct * 16 prescale * 16 postscale * 60 PR2) = 65 Hz
                                          /********************************************
@@ -304,6 +297,8 @@ void interrupt ISR() // function needs to execute in <100ms
             CCP1IF = 0; // clear the flag
         }
 
+        /**** tried to implement button push had some bugs, this is where to do it*****/
+        /**** can't send data in interrupt, get wonky stuff ******/
         if (IOCIF) // check to see if button (RA2) was pushed
         {
             //INTCON &= BIT3LO;
@@ -336,24 +331,12 @@ void interrupt ISR() // function needs to execute in <100ms
         }
 
 
-} //pops previous address from the stack, restores registers, and sets GIE bit
-//uint8_t myVar @0xD00;
+} 
 
 void MoistureCalc(void)
 {
 
-    //set the value of the moisture, should be a number from 0 to 100
-    //moisture = 25; //this will be a formula based on the characterization curve
-
-    //this gives the next index for the arrays
-    //next_index = (captureTracker / 2) - 1; //can also use left shift ">>1" to divide
-
-    //add the next moisture value and rate change to the arrays
-    //moistureValues[next_index] = uPeriod;
-    //moistureChangeRate[next_index] = moisture - previous_moisture;
-
-    //save the current moisture reading to calculate the rate change
-    //previous_moisture = moisture;
+   // this is where the moisture calc goes
 
 }
 
@@ -361,14 +344,9 @@ void SetLEDsForWatering(void) // must account for rate of watering.
 {
 //<<<<<<< HEAD
 //=======
-        /*
-        if (moisture < target_value) {PORTC &= BIT2LO; PORTC |= BIT0HI;} //Blue LEDs on, Yellow dim
-        else {PORTC |= BIT2HI; PORTC &= BIT0LO;} //Yellow LEDs on, Blue dim
-        */
 
         //try to figure out target values using uPeriod
-//>>>>>>> 7afe8ea439cef22d9c217155754c265dd20f3c67
-        if (uPeriod < 16000)
+        if (uPeriod > 15000)
         {
             PORTC &= BIT2LO;
             PORTC |= BIT0HI;
@@ -435,15 +413,7 @@ void main ()
             buttonPush = 1;
             if (buttonPush == 1)
             {
-               /*
-                itoa(uPeriod,buffer,10);                //10 means decimal
-               
-               Tenthousandth = buffer[0];
-               Thousandth = buffer[1];
-               Hundredth = buffer[2];
-               Tenth = buffer[3];
-               One = buffer[4];
-               */
+           
                 moisture[4] = (uPeriod % 10);
                 moisture[3] = ((uPeriod & 100)/10);
                 moisture[2] = ((uPeriod % 1000)/100);
@@ -456,28 +426,26 @@ void main ()
                 int t = moisture[3];
                 int u = moisture[4];
                 
-                char One = (char)(((int)'0')+q);
-                char Two = (char)(((int)'0')+r);
-                char Three = (char)(((int)'0')+s);
-                char Four = (char)(((int)'0')+t);
-                char Five = (char)(((int)'0')+u);
+                char firstDigit = (char)(((int)'0')+q);
+                char secondDigit = (char)(((int)'0')+r);
+                char thirdDigit = (char)(((int)'0')+s);
+                char fourthDigit = (char)(((int)'0')+t);
+                char fifthDigit = (char)(((int)'0')+u);
 
-
-
-                char nums[11] = {'a','b','c','d','e','f','g','h','i','j','l'};
+                // show data twice for readability  
                 for (int i=0; i<2; i++)
                 {
 
                     while(!TXIF);
-                    TXREG = One;
+                    TXREG = firstDigit;
                     while(!TXIF);
-                    TXREG = Two;
+                    TXREG = secondDigit;
                     while(!TXIF);
-                    TXREG = Three;
+                    TXREG = thirdDigit;
                     while(!TXIF);
-                    TXREG = Four;
+                    TXREG = fourthDigit;
                     while(!TXIF);
-                    TXREG = Five;
+                    TXREG = fifthDigit;
                     while(!TXIF);
                     TXREG = 0x20;
 
@@ -486,7 +454,7 @@ void main ()
 
                 buttonPush = 0;
                 captureTracker = 0;
-                //nums[10] = 0x00;
+                
             }
      
 
@@ -506,7 +474,7 @@ void main ()
             PORTC &= BIT4LO;
 
             //do calculation
-            MoistureCalc();
+            //MoistureCalc();
 
             //turn on LEDs if need to water
             SetLEDsForWatering();
