@@ -348,7 +348,7 @@ void SetLEDsForWatering(void) // must account for rate of watering.
         //try to figure out target values using uPeriod
         if (uPeriod > 15000)
         {
-            PORTC &= BIT2LO;
+            PORTC &= BIT2LO;  // PORTC = PORTC & BIT2LO; 
             PORTC |= BIT0HI;
         } //Blue LEDs dim, Yellow on
         else 
@@ -415,7 +415,7 @@ void main ()
             {
            
                 moisture[4] = (uPeriod % 10);
-                moisture[3] = ((uPeriod & 100)/10);
+                moisture[3] = ((uPeriod % 100)/10);
                 moisture[2] = ((uPeriod % 1000)/100);
                 moisture[1] = ((uPeriod % 10000)/1000);
                 moisture[0] = ((uPeriod % 100000) / 10000);
